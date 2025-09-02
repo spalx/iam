@@ -1,0 +1,48 @@
+services:
+  iam:
+    build: .
+    command: npm run dev
+    volumes:
+      - ./app:/app
+      - /app/node_modules
+    depends_on:
+      - iam-db
+    environment:
+      - PORT=3030
+      - DB_HOST=iam-db
+      - ACCESS_TOKEN_EXPIRES_IN=900 # 15 minutes
+      - REFRESH_TOKEN_EXPIRES_IN=604800 # 7 days
+      - AUTH_CODE_EXPIRES_IN=45 # seconds
+      - AUTH_CODE_LENGTH=6
+      - JWT_PRIVATE_KEY_FILE_OLD=keys/jwt.pem # we keep this
+      - JWT_PUBLIC_KEY_FILE_OLD=keys/jwt_pub.pem # and this for future key rotation
+      - JWT_PRIVATE_KEY_FILE=keys/jwt.pem
+      - JWT_PUBLIC_KEY_FILE=keys/jwt_pub.pem
+    env_file:
+      - .env
+    networks:
+      - iam-network
+      - public-network
+    restart: unless-stopped
+
+  iam-db:
+    image: postgres:latest
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - ./db_data:/var/lib/postgresql/data
+    ports:
+      - 5442:5432
+    networks:
+      - iam-network
+    restart: unless-stopped
+
+networks:
+  iam-network:
+    driver: bridge
+  public-network:
+    external: true
