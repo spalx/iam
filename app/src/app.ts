@@ -51,7 +51,7 @@ class App implements IAppPkg {
   }
 
   private setActionHandler(action: string, cmd: BaseCommand, returns = true): void {
-    transportService.setActionHandler(UserAction.CreateUser, async (req: CorrelatedMessage) => {
+    transportService.setActionHandler(action, async (req: CorrelatedMessage) => {
       return returns ? (await cmd.execute(req)) as object : {};
     });
   }

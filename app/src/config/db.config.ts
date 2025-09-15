@@ -10,7 +10,7 @@ const appDataSource = new DataSource({
   username: user,
   password,
   database: name,
-  synchronize: false,
+  synchronize: true, //TODO
   logging: false,
   entities: [__dirname + '/../entities/**/**/*.entity.{ts,js}'],
 });
