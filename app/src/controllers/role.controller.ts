@@ -9,93 +9,44 @@ import {
   UpdateRoleDTO,
   UpdateRoleDTOSchema
 } from 'iam-pkg';
-import { CorrelatedRequestDTO, CorrelatedRequestDTOSchema, transportService } from 'transport-pkg';
+import { CorrelatedMessage } from 'transport-pkg';
 import { GetAllRestQueryParams, GetAllRestQueryParamsSchema, GetAllRestPaginatedResponse } from 'rest-pkg';
 
 import roleService from '@/services/role.service';
 
 class RoleController {
-  async createRole(dto: CorrelatedRequestDTO<CreateRoleDTO>): Promise<void> {
-    let error: unknown | null = null;
-    let responseData: RoleEntityDTO | {} = {};
+  async createRole(req: CorrelatedMessage<CreateRoleDTO>): Promise<RoleEntityDTO> {
+    CreateRoleDTOSchema.parse(req.data);
 
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      CreateRoleDTOSchema.parse(dto.data);
-
-      const role = await roleService.createRole(dto.data);
-      responseData = role.output();
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, responseData, error);
-    }
+    const role = await roleService.createRole(req.data);
+    return role.output();
   }
 
-  async getRole(dto: CorrelatedRequestDTO<GetRoleDTO>): Promise<void> {
-    let error: unknown | null = null;
-    let responseData: RoleEntityDTO | {} = {};
+  async getRole(req: CorrelatedMessage<GetRoleDTO>): Promise<RoleEntityDTO> {
+    GetRoleDTOSchema.parse(req.data);
 
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      GetRoleDTOSchema.parse(dto.data);
-
-      const role = await roleService.getRole(dto.data);
-      responseData = role.output();
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, responseData, error);
-    }
+    const role = await roleService.getRole(req.data);
+    return role.output();
   }
 
-  async getRoles(dto: CorrelatedRequestDTO<GetAllRestQueryParams>): Promise<void> {
-    let error: unknown | null = null;
-    let responseData: GetAllRestPaginatedResponse<RoleEntityDTO> | {} = {};
+  async getRoles(req: CorrelatedMessage<GetAllRestQueryParams>): Promise<GetAllRestPaginatedResponse<RoleEntityDTO>> {
+    GetAllRestQueryParamsSchema.parse(req.data);
 
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      GetAllRestQueryParamsSchema.parse(dto.data);
-
-      const { roles, count } = await roleService.getRoles(dto.data);
-      responseData = { results: roles.map(role => role.output()), count };
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, responseData, error);
-    }
+    const { roles, count } = await roleService.getRoles(req.data);
+    return { results: roles.map(role => role.output()), count };
   }
 
-  async deleteRole(dto: CorrelatedRequestDTO<DeleteRoleDTO>): Promise<void> {
-    let error: unknown | null = null;
+  async deleteRole(req: CorrelatedMessage<DeleteRoleDTO>): Promise<void> {
+    DeleteRoleDTOSchema.parse(req.data);
 
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      DeleteRoleDTOSchema.parse(dto.data);
-
-      await roleService.deleteRole(dto.data);
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, {}, error);
-    }
+    await roleService.deleteRole(req.data);
   }
 
-  async updateRole(dto: CorrelatedRequestDTO<UpdateRoleDTO>): Promise<void> {
-    let error: unknown | null = null;
-    let responseData: RoleEntityDTO | {} = {};
+  async updateRole(req: CorrelatedMessage<UpdateRoleDTO>): Promise<RoleEntityDTO> {
+    UpdateRoleDTOSchema.parse(req.data);
 
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      UpdateRoleDTOSchema.parse(dto.data);
-
-      const role = await roleService.updateRole(dto.data);
-      responseData = role.output();
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, responseData, error);
-    }
+    const role = await roleService.updateRole(req.data);
+    return role.output();
   }
 }
 

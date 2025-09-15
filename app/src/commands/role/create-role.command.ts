@@ -1,11 +1,11 @@
-import { CreateRoleDTO } from 'iam-pkg';
-import { CorrelatedRequestDTO } from 'transport-pkg';
+import { CreateRoleDTO, RoleEntityDTO } from 'iam-pkg';
+import { CorrelatedMessage } from 'transport-pkg';
 
 import BaseCommand from '@/commands/base.command';
 import roleController from '@/controllers/role.controller';
 
 export default class CreateRoleCommand extends BaseCommand {
-  async execute(requestData: CorrelatedRequestDTO<CreateRoleDTO>): Promise<void> {
-    await roleController.createRole(requestData);
+  async execute(req: CorrelatedMessage<CreateRoleDTO>): Promise<RoleEntityDTO> {
+    return await roleController.createRole(req);
   }
 }

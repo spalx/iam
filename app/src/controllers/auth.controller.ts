@@ -11,98 +11,46 @@ import {
   DidRefreshTokenDTO,
   RefreshTokenDTOSchema,
   RevokeTokenDTO,
-  DidRevokeTokenDTO,
   RevokeTokenDTOSchema,
   GetJWKSDTO,
   DidGetJWKSDTO,
 } from 'iam-pkg';
-import { CorrelatedRequestDTO, CorrelatedRequestDTOSchema, transportService } from 'transport-pkg';
+import { CorrelatedMessage } from 'transport-pkg';
 
 import authService from '@/services/auth.service';
 
 class AuthController {
-  async getJWKS(dto: CorrelatedRequestDTO<GetJWKSDTO>): Promise<void> {
-    let error: unknown | null = null;
-    let responseData: DidGetJWKSDTO | {} = {};
+  async getJWKS(req: CorrelatedMessage<GetJWKSDTO>): Promise<DidGetJWKSDTO> {
+    const keys = await authService.getJWKS();
+    return { keys };
+  }
 
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
+  async authenticate(req: CorrelatedMessage<AuthenticateDTO>): Promise<DidAuthenticateDTO> {
+    AuthenticateDTOSchema.parse(req.data);
 
-      const keys = await authService.getJWKS();
-      responseData = { keys };
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, responseData, error);
+    return await authService.authenticate(req.data);
+  }
+
+  async createToken(req: CorrelatedMessage<CreateTokenDTO | CreateMFATokenDTO>): Promise<DidCreateTokenDTO> {
+    if ('challenge_id' in req.data && 'mfa_code' in req.data) {
+      CreateMFATokenDTOSchema.parse(req.data);
+      return await authService.createMFAToken(req.data);
+    } else {
+      CreateTokenDTOSchema.parse(req.data);
+      return await authService.createToken(req.data);
     }
   }
 
-  async authenticate(dto: CorrelatedRequestDTO<AuthenticateDTO>): Promise<void> {
-    let error: unknown | null = null;
-    let responseData: DidAuthenticateDTO | {} = {};
+  async refreshToken(req: CorrelatedMessage<RefreshTokenDTO>): Promise<DidRefreshTokenDTO> {
+    RefreshTokenDTOSchema.parse(req.data);
 
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      AuthenticateDTOSchema.parse(dto.data);
-
-      responseData = await authService.authenticate(dto.data);
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, responseData, error);
-    }
+    return await authService.refreshToken(req.data);
   }
 
-  async createToken(dto: CorrelatedRequestDTO<CreateTokenDTO | CreateMFATokenDTO>): Promise<void> {
-    let error: unknown | null = null;
-    let responseData: DidCreateTokenDTO | {} = {};
+  async revokeToken(req: CorrelatedMessage<RevokeTokenDTO>): Promise<void> {
+    RevokeTokenDTOSchema.parse(req.data);
 
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      if ('challenge_id' in dto.data && 'mfa_code' in dto.data) {
-        CreateMFATokenDTOSchema.parse(dto.data);
-        responseData = await authService.createMFAToken(dto.data);
-      } else {
-        CreateTokenDTOSchema.parse(dto.data);
-        responseData = await authService.createToken(dto.data);
-      }
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, responseData, error);
-    }
-  }
-
-  async refreshToken(dto: CorrelatedRequestDTO<RefreshTokenDTO>): Promise<void> {
-    let error: unknown | null = null;
-    let responseData: DidRefreshTokenDTO | {} = {};
-
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      RefreshTokenDTOSchema.parse(dto.data);
-
-      responseData = await authService.refreshToken(dto.data);
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, responseData, error);
-    }
-  }
-
-  async revokeToken(dto: CorrelatedRequestDTO<RevokeTokenDTO>): Promise<void> {
-    let error: unknown | null = null;
-    let responseData: DidRevokeTokenDTO | {} = {};
-
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      RevokeTokenDTOSchema.parse(dto.data);
-
-      responseData = await authService.revokeToken(dto.data);
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, responseData, error);
-    }
+    await authService.revokeToken(req.data);
   }
 }
 

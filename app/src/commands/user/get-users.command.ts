@@ -1,11 +1,12 @@
-import { GetAllRestQueryParams } from 'rest-pkg';
-import { CorrelatedRequestDTO } from 'transport-pkg';
+import { UserEntityDTO } from 'iam-pkg';
+import { GetAllRestQueryParams, GetAllRestPaginatedResponse } from 'rest-pkg';
+import { CorrelatedMessage } from 'transport-pkg';
 
 import BaseCommand from '@/commands/base.command';
 import userController from '@/controllers/user.controller';
 
 export default class GetUsersCommand extends BaseCommand {
-  async execute(requestData: CorrelatedRequestDTO<GetAllRestQueryParams>): Promise<void> {
-    await userController.getUsers(requestData);
+  async execute(req: CorrelatedMessage<GetAllRestQueryParams>): Promise<GetAllRestPaginatedResponse<UserEntityDTO>> {
+    return await userController.getUsers(req);
   }
 }

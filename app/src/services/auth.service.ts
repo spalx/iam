@@ -12,7 +12,6 @@ import {
   RefreshTokenDTO,
   DidRefreshTokenDTO,
   RevokeTokenDTO,
-  DidRevokeTokenDTO,
   JWKSKey
 } from 'iam-pkg';
 import { UnauthorizedError, NotFoundError, BadRequestError } from 'rest-pkg';
@@ -143,7 +142,7 @@ class AuthService {
     return refreshToken;
   }
 
-  async revokeToken(data: RevokeTokenDTO): Promise<DidRevokeTokenDTO> {
+  async revokeToken(data: RevokeTokenDTO): Promise<void> {
     const token: string = sha256(data.refresh_token);
     const refreshToken: RefreshTokenEntity = await this.findRefreshTokenByToken(token);
     if (refreshToken.revoked) {
@@ -152,8 +151,6 @@ class AuthService {
 
     refreshToken.revoked = true;
     await refreshToken.save();
-
-    return {};
   }
 
   async revokeAllRefreshTokensByUser(userId: string) {

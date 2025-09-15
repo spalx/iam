@@ -1,11 +1,11 @@
-import { AuthenticateDTO } from 'iam-pkg';
-import { CorrelatedRequestDTO } from 'transport-pkg';
+import { AuthenticateDTO, DidAuthenticateDTO } from 'iam-pkg';
+import { CorrelatedMessage } from 'transport-pkg';
 
 import BaseCommand from '@/commands/base.command';
 import authController from '@/controllers/auth.controller';
 
 export default class AuthenticateCommand extends BaseCommand {
-  async execute(requestData: CorrelatedRequestDTO<AuthenticateDTO>): Promise<void> {
-    await authController.authenticate(requestData);
+  async execute(req: CorrelatedMessage<AuthenticateDTO>): Promise<DidAuthenticateDTO> {
+    return await authController.authenticate(req);
   }
 }

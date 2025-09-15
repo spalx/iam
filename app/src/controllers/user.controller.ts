@@ -9,93 +9,44 @@ import {
   UpdateUserDTO,
   UpdateUserDTOSchema
 } from 'iam-pkg';
-import { CorrelatedRequestDTO, CorrelatedRequestDTOSchema, transportService } from 'transport-pkg';
+import { CorrelatedMessage } from 'transport-pkg';
 import { GetAllRestQueryParams, GetAllRestQueryParamsSchema, GetAllRestPaginatedResponse } from 'rest-pkg';
 
 import userService from '@/services/user.service';
 
 class UserController {
-  async createUser(dto: CorrelatedRequestDTO<CreateUserDTO>): Promise<void> {
-    let error: unknown | null = null;
-    let responseData: UserEntityDTO | {} = {};
+  async createUser(req: CorrelatedMessage<CreateUserDTO>): Promise<UserEntityDTO> {
+    CreateUserDTOSchema.parse(req.data);
 
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      CreateUserDTOSchema.parse(dto.data);
-
-      const user = await userService.createUser(dto.data);
-      responseData = user.output();
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, responseData, error);
-    }
+    const user = await userService.createUser(req.data);
+    return user.output();
   }
 
-  async getUser(dto: CorrelatedRequestDTO<GetUserDTO>): Promise<void> {
-    let error: unknown | null = null;
-    let responseData: UserEntityDTO | {} = {};
+  async getUser(req: CorrelatedMessage<GetUserDTO>): Promise<UserEntityDTO> {
+    GetUserDTOSchema.parse(req.data);
 
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      GetUserDTOSchema.parse(dto.data);
-
-      const user = await userService.getUser(dto.data);
-      responseData = user.output();
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, responseData, error);
-    }
+    const user = await userService.getUser(req.data);
+    return user.output();
   }
 
-  async getUsers(dto: CorrelatedRequestDTO<GetAllRestQueryParams>): Promise<void> {
-    let error: unknown | null = null;
-    let responseData: GetAllRestPaginatedResponse<UserEntityDTO> | {} = {};
+  async getUsers(req: CorrelatedMessage<GetAllRestQueryParams>): Promise<GetAllRestPaginatedResponse<UserEntityDTO>> {
+    GetAllRestQueryParamsSchema.parse(req.data);
 
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      GetAllRestQueryParamsSchema.parse(dto.data);
-
-      const { users, count } = await userService.getUsers(dto.data);
-      responseData = { results: users.map(user => user.output()), count };
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, responseData, error);
-    }
+    const { users, count } = await userService.getUsers(req.data);
+    return { results: users.map(user => user.output()), count };
   }
 
-  async deleteUser(dto: CorrelatedRequestDTO<DeleteUserDTO>): Promise<void> {
-    let error: unknown | null = null;
+  async deleteUser(req: CorrelatedMessage<DeleteUserDTO>): Promise<void> {
+    DeleteUserDTOSchema.parse(req.data);
 
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      DeleteUserDTOSchema.parse(dto.data);
-
-      await userService.deleteUser(dto.data);
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, {}, error);
-    }
+    await userService.deleteUser(req.data);
   }
 
-  async updateUser(dto: CorrelatedRequestDTO<UpdateUserDTO>): Promise<void> {
-    let error: unknown | null = null;
-    let responseData: UserEntityDTO | {} = {};
+  async updateUser(dto: CorrelatedMessage<UpdateUserDTO>): Promise<UserEntityDTO> {
+    UpdateUserDTOSchema.parse(dto.data);
 
-    try {
-      CorrelatedRequestDTOSchema.parse(dto);
-      UpdateUserDTOSchema.parse(dto.data);
-
-      const user = await userService.updateUser(dto.data);
-      responseData = user.output();
-    } catch (err) {
-      error = err;
-    } finally {
-      await transportService.sendResponseForRequest(dto, responseData, error);
-    }
+    const user = await userService.updateUser(dto.data);
+    return user.output();
   }
 }
 

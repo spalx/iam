@@ -1,11 +1,11 @@
-import { GetUserDTO } from 'iam-pkg';
-import { CorrelatedRequestDTO } from 'transport-pkg';
+import { GetUserDTO, UserEntityDTO } from 'iam-pkg';
+import { CorrelatedMessage } from 'transport-pkg';
 
 import BaseCommand from '@/commands/base.command';
 import userController from '@/controllers/user.controller';
 
 export default class GetUserCommand extends BaseCommand {
-  async execute(requestData: CorrelatedRequestDTO<GetUserDTO>): Promise<void> {
-    await userController.getUser(requestData);
+  async execute(req: CorrelatedMessage<GetUserDTO>): Promise<UserEntityDTO> {
+    return await userController.getUser(req);
   }
 }

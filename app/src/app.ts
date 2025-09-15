@@ -1,5 +1,5 @@
 import { IAppPkg, AppRunPriority } from 'app-life-cycle-pkg';
-import { transportService, TransportAdapterName, CorrelatedRequestDTO } from 'transport-pkg';
+import { transportService, TransportAdapterName, CorrelatedMessage } from 'transport-pkg';
 import { HTTPTransportAdapter } from 'http-transport-adapter';
 import { AuthAction, UserAction, RoleAction } from 'iam-pkg';
 
@@ -16,7 +16,7 @@ class App implements IAppPkg {
 
     transportService.registerTransport(TransportAdapterName.HTTP, new HTTPTransportAdapter(appConfig.app.port));
 
-    this.registerTransportReceivables();
+    this.setActionHandlers();
   }
 
   async shutdown(): Promise<void> {
@@ -27,29 +27,32 @@ class App implements IAppPkg {
     return AppRunPriority.Low;
   }
 
-  private registerTransportReceivables() {
-    this.registerTransportReceivable(AuthAction.GetJWKS, new GetJWKSCommand());
-    this.registerTransportReceivable(AuthAction.Authenticate, new AuthenticateCommand());
-    this.registerTransportReceivable(AuthAction.CreateToken, new CreateTokenCommand());
-    this.registerTransportReceivable(AuthAction.RefreshToken, new RefreshTokenCommand());
-    this.registerTransportReceivable(AuthAction.RevokeToken, new RevokeTokenCommand());
+  private setActionHandlers() {
+    // Auth action handlers
+    this.setActionHandler(AuthAction.GetJWKS, new GetJWKSCommand());
+    this.setActionHandler(AuthAction.Authenticate, new AuthenticateCommand());
+    this.setActionHandler(AuthAction.CreateToken, new CreateTokenCommand());
+    this.setActionHandler(AuthAction.RefreshToken, new RefreshTokenCommand());
+    this.setActionHandler(AuthAction.RevokeToken, new RevokeTokenCommand(), false);
 
-    this.registerTransportReceivable(UserAction.CreateUser, new CreateUserCommand());
-    this.registerTransportReceivable(UserAction.UpdateUser, new UpdateUserCommand());
-    this.registerTransportReceivable(UserAction.GetUser, new GetUserCommand());
-    this.registerTransportReceivable(UserAction.GetUsers, new GetUsersCommand());
-    this.registerTransportReceivable(UserAction.DeleteUser, new DeleteUserCommand());
+    // User action handlers
+    this.setActionHandler(UserAction.CreateUser, new CreateUserCommand());
+    this.setActionHandler(UserAction.UpdateUser, new UpdateUserCommand());
+    this.setActionHandler(UserAction.GetUser, new GetUserCommand());
+    this.setActionHandler(UserAction.GetUsers, new GetUsersCommand());
+    this.setActionHandler(UserAction.DeleteUser, new DeleteUserCommand(), false);
 
-    this.registerTransportReceivable(RoleAction.CreateRole, new CreateRoleCommand());
-    this.registerTransportReceivable(RoleAction.UpdateRole, new UpdateRoleCommand());
-    this.registerTransportReceivable(RoleAction.GetRole, new GetRoleCommand());
-    this.registerTransportReceivable(RoleAction.GetRoles, new GetRolesCommand());
-    this.registerTransportReceivable(RoleAction.DeleteRole, new DeleteRoleCommand());
+    // Role action handlers
+    this.setActionHandler(RoleAction.CreateRole, new CreateRoleCommand());
+    this.setActionHandler(RoleAction.UpdateRole, new UpdateRoleCommand());
+    this.setActionHandler(RoleAction.GetRole, new GetRoleCommand());
+    this.setActionHandler(RoleAction.GetRoles, new GetRolesCommand());
+    this.setActionHandler(RoleAction.DeleteRole, new DeleteRoleCommand(), false);
   }
 
-  private registerTransportReceivable(action: string, command: BaseCommand) {
-    transportService.transportsReceive(action, async (data: CorrelatedRequestDTO) => {
-      await command.execute(data);
+  private setActionHandler(action: string, cmd: BaseCommand, returns = true): void {
+    transportService.setActionHandler(UserAction.CreateUser, async (req: CorrelatedMessage) => {
+      return returns ? (await cmd.execute(req)) as object : {};
     });
   }
 }
