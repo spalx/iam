@@ -1,6 +1,7 @@
 export interface IAppConfig {
   app: {
     port: number;
+    host: string;
   };
   auth: {
     jwt_private_key_file_old: string;

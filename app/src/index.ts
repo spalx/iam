@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { logger } from 'common-loggers-pkg';
 import { appService } from 'app-life-cycle-pkg';
 import { transportService } from 'transport-pkg';
+import { serviceDiscoveryService } from 'service-discovery-pkg';
 
 import app from './app';
 
@@ -10,6 +11,7 @@ async function startServer(): Promise<void> {
     logger.info('Starting IAM service');
 
     appService.use(app);
+    appService.use(serviceDiscoveryService);
     appService.use(transportService);
 
     await appService.run();

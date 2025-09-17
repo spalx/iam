@@ -1,6 +1,6 @@
 {
   "name": "iam",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "dist/index.js",
   "scripts": {
     "start": "ts-node -r tsconfig-paths/register src/index.ts",
@@ -14,12 +14,13 @@
     "app-life-cycle-pkg": "git+git@github.com:spalx/app-life-cycle-pkg.git#1.0.5",
     "common-loggers-pkg": "git+git@github.com:spalx/common-loggers-pkg.git#1.0.3",
     "http-transport-adapter": "git+git@github.com:spalx/http-transport-adapter.git#1.0.4",
-    "iam-pkg": "git+git@github.com:spalx/iam-pkg.git#1.2.3",
+    "iam-pkg": "git+git@github.com:spalx/iam-pkg.git#1.2.4",
     "jose": "^6.1.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.3",
     "reflect-metadata": "^0.2.2",
     "rest-pkg": "git+git@github.com:spalx/rest-pkg.git#1.0.3",
+    "service-discovery-pkg": "git+git@github.com:spalx/service-discovery-pkg.git#1.0.1",
     "transport-pkg": "git+git@github.com:spalx/transport-pkg.git#1.1.5",
     "tsconfig-paths": "^4.2.0",
     "typeorm": "^0.3.21",

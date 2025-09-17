@@ -1,7 +1,8 @@
 import { IAppPkg, AppRunPriority } from 'app-life-cycle-pkg';
 import { transportService, TransportAdapterName, CorrelatedMessage } from 'transport-pkg';
 import { HTTPTransportAdapter } from 'http-transport-adapter';
-import { AuthAction, UserAction, RoleAction } from 'iam-pkg';
+import { AuthAction, UserAction, RoleAction, SERVICE_NAME } from 'iam-pkg';
+import { serviceDiscoveryService } from 'service-discovery-pkg';
 
 import appDataSource from '@/config/db.config';
 import appConfig from '@/config/app.config';
@@ -17,9 +18,17 @@ class App implements IAppPkg {
     transportService.registerTransport(TransportAdapterName.HTTP, new HTTPTransportAdapter(appConfig.app.port));
 
     this.setActionHandlers();
+
+    // Make service discoverable by other services
+    await serviceDiscoveryService.registerService({
+      service_name: SERVICE_NAME,
+      host: appConfig.app.host,
+      port: appConfig.app.port,
+    });
   }
 
   async shutdown(): Promise<void> {
+    await serviceDiscoveryService.deregisterService(appConfig.app.host);
     await appDataSource.destroy();
   }
 
@@ -52,7 +61,8 @@ class App implements IAppPkg {
 
   private setActionHandler(action: string, cmd: BaseCommand, returns = true): void {
     transportService.setActionHandler(action, async (req: CorrelatedMessage) => {
-      return returns ? (await cmd.execute(req)) as object : {};
+      const res = await cmd.execute(req);
+      return returns ? res as object : {};
     });
   }
 }

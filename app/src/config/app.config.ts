@@ -3,6 +3,7 @@ import { IAppConfig } from '@/interfaces/app-config.interface';
 const appConfig: IAppConfig = {
   app: {
     port: Number(process.env.PORT),
+    host: process.env.HOST || 'iam',
   },
   auth: {
     jwt_private_key_file_old: process.env.JWT_PRIVATE_KEY_FILE_OLD || '',
