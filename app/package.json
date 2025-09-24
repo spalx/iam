@@ -9,7 +9,8 @@
     "lint": "eslint 'src/**/*.{ts,tsx}'",
     "lint:fix": "eslint 'src/**/*.{ts,tsx}' --fix",
     "format": "prettier --write 'src/**/*.{ts,tsx,json,md}'",
-    "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js -d src/config/db.config.ts"
+    "typeorm": "node ./node_modules/typeorm/cli.js -d ./dist/config/db.config.js",
+    "typeorm:dev": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js -d src/config/db.config.ts"
   },
   "dependencies": {
     "app-life-cycle-pkg": "git+git@github.com:spalx/app-life-cycle-pkg.git#1.0.5",

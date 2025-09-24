@@ -21,8 +21,11 @@ FROM node:24-slim AS production
 
 WORKDIR /app
 
+RUN npm install -g pnpm
+
+COPY --from=builder /app/keys ./keys
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY ./app/package.json ./
 
-CMD ["sh", "-c", "pnpm typeorm migration:run && node dist/index.js"]
+CMD ["sh", "-c", "pnpm typeorm migration:run && pnpm run start"]
