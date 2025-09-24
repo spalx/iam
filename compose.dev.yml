@@ -1,0 +1,12 @@
+services:
+  iam:
+    build:
+      context: .
+      target: builder
+    command: sh -c "pnpm typeorm migration:run && pnpm run dev"
+    volumes:
+      - ./app:/app
+      - iam-node-modules:/app/node_modules
+
+volumes:
+  iam-node-modules:
