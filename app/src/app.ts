@@ -12,12 +12,18 @@ import { CreateUserCommand, UpdateUserCommand, GetUserCommand, GetUsersCommand, 
 import { CreateRoleCommand, UpdateRoleCommand, GetRoleCommand, GetRolesCommand, DeleteRoleCommand } from '@/commands/role';
 
 class App implements IAppPkg {
-  async init(): Promise<void> {
-    await appDataSource.initialize();
+  private httpTransportAdapter: HTTPTransportAdapter;
 
-    transportService.registerTransport(TransportAdapterName.HTTP, new HTTPTransportAdapter(appConfig.app.port));
+  constructor() {
+    this.httpTransportAdapter = new HTTPTransportAdapter(appConfig.app.port);
+
+    transportService.registerTransport(TransportAdapterName.HTTP, this.httpTransportAdapter);
 
     this.setActionHandlers();
+  }
+
+  async init(): Promise<void> {
+    await appDataSource.initialize();
 
     // Make service discoverable by other services
     await serviceDiscoveryService.registerService({
@@ -34,6 +40,18 @@ class App implements IAppPkg {
 
   getPriority(): number {
     return AppRunPriority.High;
+  }
+
+  getName(): string {
+    return 'iam';
+  }
+
+  getDependencies(): IAppPkg[] {
+    return [
+      transportService,
+      this.httpTransportAdapter,
+      serviceDiscoveryService
+    ];
   }
 
   private setActionHandlers() {
