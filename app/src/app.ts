@@ -43,7 +43,7 @@ class App implements IAppPkg {
   }
 
   getName(): string {
-    return 'iam';
+    return SERVICE_NAME;
   }
 
   getDependencies(): IAppPkg[] {
@@ -54,7 +54,7 @@ class App implements IAppPkg {
     ];
   }
 
-  private setActionHandlers() {
+  private setActionHandlers(): void {
     // Auth action handlers
     this.setActionHandler(AuthAction.GetJWKS, new GetJWKSCommand());
     this.setActionHandler(AuthAction.Authenticate, new AuthenticateCommand());

@@ -1,6 +1,6 @@
 {
   "name": "iam",
-  "version": "1.0.5",
+  "version": "1.0.7",
   "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node -r tsconfig-paths/register' src/index.ts",
@@ -13,31 +13,31 @@
     "typeorm:dev": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js -d src/config/db.config.ts"
   },
   "dependencies": {
-    "app-life-cycle-pkg": "git+git@github.com:spalx/app-life-cycle-pkg.git#1.0.6",
-    "common-loggers-pkg": "git+git@github.com:spalx/common-loggers-pkg.git#1.0.3",
-    "http-transport-adapter": "git+git@github.com:spalx/http-transport-adapter.git#1.0.6",
-    "iam-pkg": "git+git@github.com:spalx/iam-pkg.git#1.2.7",
+    "app-life-cycle-pkg": "git+git@github.com:spalx/app-life-cycle-pkg.git#1.0.7",
+    "common-loggers-pkg": "git+git@github.com:spalx/common-loggers-pkg.git#1.0.4",
+    "http-transport-adapter": "git+git@github.com:spalx/http-transport-adapter.git#1.0.7",
+    "iam-pkg": "git+git@github.com:spalx/iam-pkg.git#1.2.8",
     "jose": "^6.1.0",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.13.3",
+    "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
-    "rest-pkg": "git+git@github.com:spalx/rest-pkg.git#1.0.3",
-    "service-discovery-pkg": "git+git@github.com:spalx/service-discovery-pkg.git#1.0.2",
-    "transport-pkg": "git+git@github.com:spalx/transport-pkg.git#1.1.7",
-    "typeorm": "^0.3.21",
+    "rest-pkg": "git+git@github.com:spalx/rest-pkg.git#1.0.4",
+    "service-discovery-pkg": "git+git@github.com:spalx/service-discovery-pkg.git#1.0.3",
+    "transport-pkg": "git+git@github.com:spalx/transport-pkg.git#1.1.8",
+    "typeorm": "^0.3.27",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^24.5.2",
-    "eslint": "^9.23.0",
-    "eslint-config-prettier": "^10.1.1",
-    "nodemon": "^3.1.9",
-    "prettier": "^3.5.3",
+    "@types/node": "^24.7.0",
+    "eslint": "^9.37.0",
+    "eslint-config-prettier": "^10.1.8",
+    "nodemon": "^3.1.10",
+    "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
     "tsc-alias": "^1.8.16",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.8.2",
-    "typescript-eslint": "^8.28.0"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.45.0"
   }
 }
