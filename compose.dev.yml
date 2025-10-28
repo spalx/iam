@@ -7,6 +7,9 @@ services:
     volumes:
       - ./app:/app
       - iam-node-modules:/app/node_modules
+  iam-db:
+    ports:
+      - 5452:5432
 
 volumes:
   iam-node-modules:
