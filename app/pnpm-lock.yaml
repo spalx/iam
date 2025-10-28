@@ -18,8 +18,8 @@ importers:
         specifier: git+git@github.com:spalx/http-transport-adapter.git#1.0.7
         version: https://codeload.github.com/spalx/http-transport-adapter/tar.gz/35862d42e247c72470e3bb88571baae301eaf044
       iam-pkg:
-        specifier: git+git@github.com:spalx/iam-pkg.git#1.2.8
-        version: https://codeload.github.com/spalx/iam-pkg/tar.gz/7c28ef718f019288216062fa7ed99f017d336cff
+        specifier: git+git@github.com:spalx/iam-pkg.git#1.2.9
+        version: https://codeload.github.com/spalx/iam-pkg/tar.gz/83ce785bf78dfd672cfa130e5c1da0afc52b0539
       jose:
         specifier: ^6.1.0
         version: 6.1.0
@@ -690,9 +690,9 @@ packages:
     resolution: {tarball: https://codeload.github.com/spalx/http-transport-adapter/tar.gz/35862d42e247c72470e3bb88571baae301eaf044}
     version: 1.0.7
 
-  iam-pkg@https://codeload.github.com/spalx/iam-pkg/tar.gz/7c28ef718f019288216062fa7ed99f017d336cff:
-    resolution: {tarball: https://codeload.github.com/spalx/iam-pkg/tar.gz/7c28ef718f019288216062fa7ed99f017d336cff}
-    version: 1.2.8
+  iam-pkg@https://codeload.github.com/spalx/iam-pkg/tar.gz/83ce785bf78dfd672cfa130e5c1da0afc52b0539:
+    resolution: {tarball: https://codeload.github.com/spalx/iam-pkg/tar.gz/83ce785bf78dfd672cfa130e5c1da0afc52b0539}
+    version: 1.2.9
 
   ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
@@ -2032,7 +2032,7 @@ snapshots:
       rest-pkg: https://codeload.github.com/spalx/rest-pkg/tar.gz/2d1b553434679603fe387d091484c1fd101e61be
       transport-pkg: https://codeload.github.com/spalx/transport-pkg/tar.gz/bb7ab491e3a805d455a80d0b6adb9002fe8d3e07
 
-  iam-pkg@https://codeload.github.com/spalx/iam-pkg/tar.gz/7c28ef718f019288216062fa7ed99f017d336cff:
+  iam-pkg@https://codeload.github.com/spalx/iam-pkg/tar.gz/83ce785bf78dfd672cfa130e5c1da0afc52b0539:
     dependencies:
       app-life-cycle-pkg: https://codeload.github.com/spalx/app-life-cycle-pkg/tar.gz/8a53153cee6177a9f4ac581a932e780bee2ddbf7
       jose: 6.1.0
