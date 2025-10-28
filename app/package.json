@@ -16,7 +16,7 @@
     "app-life-cycle-pkg": "git+git@github.com:spalx/app-life-cycle-pkg.git#1.0.7",
     "common-loggers-pkg": "git+git@github.com:spalx/common-loggers-pkg.git#1.0.4",
     "http-transport-adapter": "git+git@github.com:spalx/http-transport-adapter.git#1.0.7",
-    "iam-pkg": "git+git@github.com:spalx/iam-pkg.git#1.2.8",
+    "iam-pkg": "git+git@github.com:spalx/iam-pkg.git#1.2.9",
     "jose": "^6.1.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3",

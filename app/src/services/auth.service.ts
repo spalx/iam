@@ -143,8 +143,7 @@ class AuthService {
   }
 
   async revokeToken(data: RevokeTokenDTO): Promise<void> {
-    const token: string = sha256(data.refresh_token);
-    const refreshToken: RefreshTokenEntity = await this.findRefreshTokenByToken(token);
+    const refreshToken: RefreshTokenEntity = await this.findRefreshTokenByToken(data.refresh_token);
     if (refreshToken.revoked) {
       throw new BadRequestError('Token already revoked');
     }
