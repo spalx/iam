@@ -21,7 +21,7 @@
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
-    "rest-pkg": "git+git@github.com:spalx/rest-pkg.git#1.0.4",
+    "rest-pkg": "git+git@github.com:spalx/rest-pkg.git#1.0.5",
     "service-discovery-pkg": "git+git@github.com:spalx/service-discovery-pkg.git#1.0.3",
     "transport-pkg": "git+git@github.com:spalx/transport-pkg.git#1.1.8",
     "typeorm": "^0.3.27",
