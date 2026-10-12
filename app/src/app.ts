@@ -1,15 +1,34 @@
-import { IAppPkg, AppRunPriority } from 'app-life-cycle-pkg';
-import { transportService, TransportAdapterName, CorrelatedMessage } from 'transport-pkg';
-import { HTTPTransportAdapter } from 'http-transport-adapter';
-import { AuthAction, UserAction, RoleAction, SERVICE_NAME } from 'iam-pkg';
-import { serviceDiscoveryService } from 'service-discovery-pkg';
+import { IAppPkg, AppRunPriority } from '@spalx/app-life-cycle-pkg';
+import { transportService, TransportAdapterName, CorrelatedMessage } from '@spalx/transport-pkg';
+import { HTTPTransportAdapter } from '@spalx/http-transport-adapter';
+import { AuthAction, UserAction, RoleAction, SERVICE_NAME } from '@spalx/iam-pkg';
+import { serviceDiscoveryService } from '@spalx/service-discovery-pkg';
 
-import appDataSource from '@/config/db.config';
+import appDataSource from '@/common/db/app-data-source';
 import appConfig from '@/config/app.config';
 import BaseCommand from '@/commands/base.command';
-import { GetJWKSCommand, AuthenticateCommand, CreateTokenCommand, RefreshTokenCommand, RevokeTokenCommand } from '@/commands/auth';
-import { CreateUserCommand, UpdateUserCommand, GetUserCommand, GetUsersCommand, DeleteUserCommand } from '@/commands/user';
-import { CreateRoleCommand, UpdateRoleCommand, GetRoleCommand, GetRolesCommand, DeleteRoleCommand } from '@/commands/role';
+import {
+  GetJWKSCommand,
+  AuthenticateCommand,
+  CreateTokenCommand,
+  RefreshTokenCommand,
+  RevokeTokenCommand,
+} from '@/commands/auth';
+import {
+  CreateUserCommand,
+  UpdateUserCommand,
+  GetUserCommand,
+  GetUsersCommand,
+  DeleteUserCommand,
+} from '@/commands/user';
+import {
+  CreateRoleCommand,
+  UpdateRoleCommand,
+  GetRoleCommand,
+  GetRolesCommand,
+  DeleteRoleCommand,
+  DeleteRolesCommand,
+} from '@/commands/role';
 
 class App implements IAppPkg {
   private httpTransportAdapter: HTTPTransportAdapter;
@@ -24,6 +43,7 @@ class App implements IAppPkg {
 
   async init(): Promise<void> {
     await appDataSource.initialize();
+    await appDataSource.runMigrations();
 
     // Make service discoverable by other services
     await serviceDiscoveryService.registerService({
@@ -47,11 +67,7 @@ class App implements IAppPkg {
   }
 
   getDependencies(): IAppPkg[] {
-    return [
-      transportService,
-      this.httpTransportAdapter,
-      serviceDiscoveryService
-    ];
+    return [transportService, this.httpTransportAdapter, serviceDiscoveryService];
   }
 
   private setActionHandlers(): void {
@@ -75,12 +91,13 @@ class App implements IAppPkg {
     this.setActionHandler(RoleAction.GetRole, new GetRoleCommand());
     this.setActionHandler(RoleAction.GetRoles, new GetRolesCommand());
     this.setActionHandler(RoleAction.DeleteRole, new DeleteRoleCommand(), false);
+    this.setActionHandler(RoleAction.DeleteRoles, new DeleteRolesCommand(), false);
   }
 
   private setActionHandler(action: string, cmd: BaseCommand, returns = true): void {
     transportService.setActionHandler(action, async (req: CorrelatedMessage) => {
       const res = await cmd.execute(req);
-      return returns ? res as object : {};
+      return returns ? (res as object) : {};
     });
   }
 }

@@ -1,7 +1,6 @@
 import jwt, { SignOptions, Algorithm } from 'jsonwebtoken';
 import { randomBytes, createPublicKey, KeyObject } from 'crypto';
 import { exportJWK } from 'jose';
-import { v4 as uuidv4 } from 'uuid';
 import { Repository, EntityManager } from 'typeorm';
 import {
   AuthenticateDTO,
@@ -12,22 +11,27 @@ import {
   RefreshTokenDTO,
   DidRefreshTokenDTO,
   RevokeTokenDTO,
-  JWKSKey
-} from 'iam-pkg';
-import { UnauthorizedError, NotFoundError, BadRequestError } from 'rest-pkg';
+  JWKSKey,
+} from '@spalx/iam-pkg';
+import { UnauthorizedError, NotFoundError, BadRequestError } from '@spalx/rest-pkg';
 
 import userService from '@/services/user.service';
 import UserEntity from '@/entities/user/user.entity';
 import AuthCodeEntity from '@/entities/auth/auth-code.entity';
-import appDataSource from '@/config/db.config';
+import appDataSource from '@/common/db/app-data-source';
 import RefreshTokenEntity from '@/entities/auth/refresh-token.entity';
 import appConfig from '@/config/app.config';
 import { keys, KeyEntry } from '@/config/keys.config';
-import { sha256 } from '@/common/utils';
+import { generateUuid, sha256 } from '@/common/utils';
 
 class AuthService {
-  private refreshTokenRepository: Repository<RefreshTokenEntity> = appDataSource.getRepository(RefreshTokenEntity);
-  private authCodeRepository: Repository<AuthCodeEntity> = appDataSource.getRepository(AuthCodeEntity);
+  private get refreshTokenRepository(): Repository<RefreshTokenEntity> {
+    return appDataSource.getRepository(RefreshTokenEntity);
+  }
+
+  private get authCodeRepository(): Repository<AuthCodeEntity> {
+    return appDataSource.getRepository(AuthCodeEntity);
+  }
 
   async getJWKS(): Promise<JWKSKey[]> {
     return await Promise.all(keys.map(this.toJWK));
@@ -89,7 +93,9 @@ class AuthService {
   }
 
   async findAuthCodeByCodeAndChallenge(mfaCode: string, challengeId: string): Promise<AuthCodeEntity> {
-    const authCode: AuthCodeEntity | null = await this.authCodeRepository.findOne({ where: { mfa_code: mfaCode, challenge_id: challengeId } });
+    const authCode: AuthCodeEntity | null = await this.authCodeRepository.findOne({
+      where: { mfa_code: mfaCode, challenge_id: challengeId },
+    });
     if (!authCode) {
       throw new NotFoundError('Auth code not found');
     }
@@ -111,9 +117,7 @@ class AuthService {
     if (minFingerprintsToMatch > 0) {
       const fingerprints: string[] = data.fingerprints ?? [];
 
-      const fingerprintMatches = fingerprints.filter(fp =>
-        refreshToken.fingerprints.includes(sha256(fp))
-      ).length;
+      const fingerprintMatches = fingerprints.filter((fp) => refreshToken.fingerprints.includes(sha256(fp))).length;
 
       if (fingerprintMatches < minFingerprintsToMatch) {
         await this.revokeAllRefreshTokensByUser(refreshToken.user_id);
@@ -134,7 +138,9 @@ class AuthService {
   }
 
   async findRefreshTokenByToken(token: string): Promise<RefreshTokenEntity> {
-    const refreshToken: RefreshTokenEntity | null = await this.refreshTokenRepository.findOne({ where: { token: sha256(token) } });
+    const refreshToken: RefreshTokenEntity | null = await this.refreshTokenRepository.findOne({
+      where: { token: sha256(token) },
+    });
     if (!refreshToken) {
       throw new NotFoundError('Refresh token not found');
     }
@@ -153,10 +159,7 @@ class AuthService {
   }
 
   async revokeAllRefreshTokensByUser(userId: string) {
-    await this.refreshTokenRepository.update(
-      { user_id: userId },
-      { revoked: true }
-    );
+    await this.refreshTokenRepository.update({ user_id: userId }, { revoked: true });
   }
 
   private async toJWK(key: KeyEntry): Promise<JWKSKey> {
@@ -170,15 +173,19 @@ class AuthService {
     };
   }
 
-  private async createTokensForUser(user: UserEntity, fingerprints?: string[], manager?: EntityManager): Promise<DidCreateTokenDTO> {
+  private async createTokensForUser(
+    user: UserEntity,
+    fingerprints?: string[],
+    manager?: EntityManager
+  ): Promise<DidCreateTokenDTO> {
     const accessToken: string = this.generateAccessToken(user);
     const refreshToken: string = this.generateRefreshToken();
     await this.saveRefreshToken(refreshToken, user, fingerprints, manager);
 
     return {
       access_token: accessToken,
-      refresh_token: refreshToken
-    }
+      refresh_token: refreshToken,
+    };
   }
 
   private generateAccessToken(user: UserEntity): string {
@@ -188,14 +195,10 @@ class AuthService {
       algorithm: activeKey.alg as Algorithm,
       keyid: activeKey.kid,
       expiresIn: appConfig.auth.access_token_expires_in,
-      jwtid: uuidv4(),
+      jwtid: generateUuid(),
     };
 
-    return jwt.sign(
-      { user: user.output() },
-      activeKey.privateKey,
-      options
-    );
+    return jwt.sign({ user: user.output() }, activeKey.privateKey, options);
   }
 
   private generateRefreshToken(length = 64): string {
@@ -207,12 +210,17 @@ class AuthService {
     await (manager ? manager.save(refreshToken) : refreshToken.save());
   }
 
-  private async saveRefreshToken(token: string, user: UserEntity, fingerprints?: string[], manager?: EntityManager): Promise<void> {
+  private async saveRefreshToken(
+    token: string,
+    user: UserEntity,
+    fingerprints?: string[],
+    manager?: EntityManager
+  ): Promise<void> {
     const refreshToken = new RefreshTokenEntity();
     refreshToken.user_id = user.id;
     refreshToken.token = sha256(token);
     refreshToken.expires_at = new Date(Date.now() + 1000 * appConfig.auth.refresh_token_expires_in);
-    refreshToken.fingerprints = fingerprints ? fingerprints.map(fingerprint => sha256(fingerprint)) : [];
+    refreshToken.fingerprints = fingerprints ? fingerprints.map((fingerprint) => sha256(fingerprint)) : [];
     await (manager ? manager.save(refreshToken) : refreshToken.save());
   }
 
@@ -221,10 +229,12 @@ class AuthService {
   }
 
   private async generateAndSaveAuthCode(user: UserEntity): Promise<AuthCodeEntity> {
-    let code: string = '';
-    while (1) {
+    let code = '';
+    while (true) {
       code = this.generateRandomString(appConfig.auth.auth_code_length);
-      const codeExists: AuthCodeEntity | null = await this.authCodeRepository.findOne({ where: { mfa_code: code, user_id: user.id } });
+      const codeExists: AuthCodeEntity | null = await this.authCodeRepository.findOne({
+        where: { mfa_code: code, user_id: user.id },
+      });
       if (!codeExists) {
         break;
       }
@@ -241,7 +251,7 @@ class AuthService {
   }
 
   private generateRandomString(length = 6): string {
-    const bytes = Math.ceil(length * 3 / 4); // base64 expands 3 bytes into 4 chars
+    const bytes = Math.ceil((length * 3) / 4); // base64 expands 3 bytes into 4 chars
     return randomBytes(bytes).toString('base64url').slice(0, length);
   }
 }

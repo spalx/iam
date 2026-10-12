@@ -14,8 +14,8 @@ import {
   RevokeTokenDTOSchema,
   GetJWKSDTO,
   DidGetJWKSDTO,
-} from 'iam-pkg';
-import { CorrelatedMessage } from 'transport-pkg';
+} from '@spalx/iam-pkg';
+import { CorrelatedMessage } from '@spalx/transport-pkg';
 
 import authService from '@/services/auth.service';
 

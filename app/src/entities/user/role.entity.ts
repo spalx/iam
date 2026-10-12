@@ -1,5 +1,5 @@
-import { Column, JoinColumn, Entity, ManyToMany, ManyToOne } from 'typeorm';
-import { RoleEntityDTO } from 'iam-pkg';
+import { Column, Entity, ManyToMany } from 'typeorm';
+import { RoleEntityDTO } from '@spalx/iam-pkg';
 
 import BaseEntity from '@/entities/base.entity';
 import UserEntity from './user.entity';
@@ -19,7 +19,7 @@ export default class RoleEntity extends BaseEntity {
     return {
       id: this.id,
       name: this.name,
-      permissions: this.permissions
-    }
+      permissions: this.permissions,
+    };
   }
 }

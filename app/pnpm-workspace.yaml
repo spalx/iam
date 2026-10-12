@@ -1,0 +1,10 @@
+minimumReleaseAgeExclude:
+  - '@spalx/app-life-cycle-pkg'
+  - '@spalx/common-loggers-pkg'
+  - '@spalx/http-transport-adapter'
+  - '@spalx/iam-pkg'
+  - '@spalx/rest-pkg'
+  - '@spalx/service-discovery-pkg'
+  - '@spalx/transport-pkg'
+allowBuilds:
+  msgpackr-extract: true

@@ -1,6 +1,6 @@
 import { SelectQueryBuilder, ObjectLiteral } from 'typeorm';
-import { createHash } from 'crypto';
-import { GetAllRestQueryParams, RestFilterFieldOperator } from 'rest-pkg';
+import { createHash, randomUUID } from 'crypto';
+import { GetAllRestQueryParams, RestFilterFieldOperator } from '@spalx/rest-pkg';
 
 export function sha256(str: string): string {
   return createHash('sha256').update(str).digest('hex');
@@ -92,10 +92,7 @@ export function applyRestQueryParams<T extends ObjectLiteral>(
   // Sorting
   if (params.sort && params.sort.length > 0) {
     params.sort.forEach((sortField) => {
-      qb.addOrderBy(
-        `${alias}.${sortField.sort_by}`,
-        sortField.sort_direction === -1 ? 'DESC' : 'ASC'
-      );
+      qb.addOrderBy(`${alias}.${sortField.sort_by}`, sortField.sort_direction === -1 ? 'DESC' : 'ASC');
     });
   } else {
     qb.addOrderBy(`${alias}.id`, 'DESC');
@@ -107,4 +104,8 @@ export function applyRestQueryParams<T extends ObjectLiteral>(
   qb.skip((page - 1) * limit).take(limit);
 
   return qb;
+}
+
+export function generateUuid(): string {
+  return randomUUID();
 }

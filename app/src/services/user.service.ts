@@ -1,15 +1,17 @@
 import { Repository } from 'typeorm';
-import { NotFoundError, BadRequestError, GetAllRestQueryParams } from 'rest-pkg';
-import { CreateUserDTO, UpdateUserDTO, GetUserDTO, DeleteUserDTO } from 'iam-pkg';
+import { NotFoundError, BadRequestError } from '@spalx/rest-pkg';
+import { CreateUserDTO, UpdateUserDTO, GetUserDTO, DeleteUserDTO } from '@spalx/iam-pkg';
 
 import roleService from '@/services/role.service';
 import UserEntity from '@/entities/user/user.entity';
-import appDataSource from '@/config/db.config';
-import { sha256, applyRestQueryParams } from '@/common/utils';
+import appDataSource from '@/common/db/app-data-source';
+import { sha256 } from '@/common/utils';
 import appConfig from '@/config/app.config';
 
 class UserService {
-  private userRepository: Repository<UserEntity> = appDataSource.getRepository(UserEntity);
+  private get userRepository(): Repository<UserEntity> {
+    return appDataSource.getRepository(UserEntity);
+  }
 
   async findUserByIdentity(identity: string): Promise<UserEntity> {
     const user: UserEntity | null = await this.userRepository
@@ -42,14 +44,12 @@ class UserService {
     }
 
     const user = new UserEntity();
-    user.identities = data.identities.map(identity => this.hashIdentity(identity));
+    user.identities = data.identities.map((identity) => this.hashIdentity(identity));
     user.password = data.password ? this.hashPassword(data.password) : '';
     user.mfa_enabled = data.mfa_enabled ?? false;
     user.is_active = data.is_active === false ? false : true;
     user.meta = data.meta ?? null;
-    user.roles = await Promise.all(
-      data.roles.map(roleName => roleService.findRoleByName(roleName))
-    );
+    user.roles = await Promise.all(data.roles.map((roleName) => roleService.findRoleByName(roleName)));
 
     await user.save();
 
@@ -59,13 +59,12 @@ class UserService {
   async updateUser(data: UpdateUserDTO): Promise<UserEntity> {
     const user: UserEntity = await this.findUserById(data.id);
 
-    if (data.identities) {
-      const identityInUse: string | false = await this.isAnyIdentityUsed(data.identities, user.id);
-      if (identityInUse) {
-        throw new BadRequestError(`User with identity ${identityInUse} already exists`);
-      }
+    if (data.identities && data.identities.length > 0) {
+      const identityInUse = await this.isAnyIdentityUsed(data.identities, user.id);
 
-      user.identities = data.identities.map(identity => this.hashIdentity(identity));
+      if (!identityInUse) {
+        user.identities = data.identities.map((identity) => this.hashIdentity(identity));
+      }
     }
 
     if ('password' in data) {
@@ -85,9 +84,7 @@ class UserService {
     }
 
     if (data.roles) {
-      user.roles = await Promise.all(
-        data.roles.map(roleName => roleService.findRoleByName(roleName))
-      );
+      user.roles = await Promise.all(data.roles.map((roleName) => roleService.findRoleByName(roleName)));
     }
 
     await user.save();
@@ -103,36 +100,6 @@ class UserService {
     }
 
     throw new NotFoundError('User not found'); // Should never reach here
-  }
-
-  async getUsers(data: GetAllRestQueryParams): Promise<{ users: UserEntity[], count: number }> {
-    const validFields = ['id', 'is_active', 'mfa_enabled', 'meta', 'roles'];
-
-    // 1. Deduplicate and filter requested fields
-    const requestedFields = Array.from(new Set(data.fields ?? [])).filter(f =>
-      validFields.includes(f)
-    );
-
-    // 2. Start query builder
-    let qb = this.userRepository.createQueryBuilder('user');
-
-    // 3. Conditionally join roles if needed
-    if (requestedFields.includes('roles')) {
-      qb = qb.leftJoinAndSelect('user.roles', 'roles');
-    }
-
-    // 4. Call generic helper
-    const queryParams: Partial<GetAllRestQueryParams> = { ...data };
-    if (requestedFields.length > 0) {
-      queryParams.fields = requestedFields;
-    }
-
-    applyRestQueryParams(qb, 'user', queryParams);
-
-    // 5. Execute query
-    const [users, count] = await qb.getManyAndCount();
-
-    return { users, count };
   }
 
   async deleteUser(data: DeleteUserDTO): Promise<void> {
@@ -161,6 +128,15 @@ class UserService {
     }
 
     return false;
+  }
+
+  async isRoleUsed(roleId: string): Promise<boolean> {
+    return await this.userRepository
+      .createQueryBuilder('user')
+      .innerJoin('user.roles', 'role')
+      .where('role.id = :roleId', { roleId })
+      .getCount()
+      .then((count: number) => count > 0);
   }
 }
 

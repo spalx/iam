@@ -1,5 +1,6 @@
 services:
   iam:
+    mem_limit: 1g
     build:
       context: .
       target: production
@@ -7,11 +8,18 @@ services:
       - iam-db
     env_file:
       - .env
+    environment:
+      - TZ=${TZ}
+      - NODE_ENV=production
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     networks:
       - iam-network
     restart: unless-stopped
 
   iam-db:
+    mem_limit: 2g
     image: postgres:latest
     env_file:
       - .env
@@ -19,8 +27,33 @@ services:
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
+      - TZ=${TZ}
     volumes:
       - iam-db-data:/var/lib/postgresql
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    networks:
+      - iam-network
+    restart: unless-stopped
+    command: postgres -c timezone=${TZ} -c log_timezone=${TZ}
+
+  iam-db-backup:
+    mem_limit: 512m
+    image: ghcr.io/spalx/db-backup:1.2
+    depends_on:
+      - iam-db
+    env_file:
+      - .env
+    environment:
+      - BKP_CRON_ENABLED=1
+      - BKP_CRON_SCHEDULE=0 */12 * * *
+      - BKP_RETENTION_DAYS=14
+      - BKP_DB_TYPE=postgres
+      - BKP_DB_HOST=${DB_HOST}
+      - BKP_DB_PORT=5432
+      - BKP_DB_USER=${DB_USER}
+      - BKP_DB_PASSWORD=${DB_PASSWORD}
+      - BKP_DB_NAME=${DB_NAME}
     networks:
       - iam-network
     restart: unless-stopped

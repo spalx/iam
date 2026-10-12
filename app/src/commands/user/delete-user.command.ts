@@ -1,5 +1,5 @@
-import { DeleteUserDTO } from 'iam-pkg';
-import { CorrelatedMessage } from 'transport-pkg';
+import { DeleteUserDTO } from '@spalx/iam-pkg';
+import { CorrelatedMessage } from '@spalx/transport-pkg';
 
 import BaseCommand from '@/commands/base.command';
 import userController from '@/controllers/user.controller';

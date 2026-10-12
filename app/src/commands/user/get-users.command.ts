@@ -1,6 +1,6 @@
-import { UserEntityDTO } from 'iam-pkg';
-import { GetAllRestQueryParams, GetAllRestPaginatedResponse } from 'rest-pkg';
-import { CorrelatedMessage } from 'transport-pkg';
+import { UserEntityDTO } from '@spalx/iam-pkg';
+import { GetAllRestQueryParams, GetAllRestPaginatedResponse } from '@spalx/rest-pkg';
+import { CorrelatedMessage } from '@spalx/transport-pkg';
 
 import BaseCommand from '@/commands/base.command';
 import userController from '@/controllers/user.controller';

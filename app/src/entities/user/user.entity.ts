@@ -1,5 +1,5 @@
-import { Column, Entity, JoinTable, JoinColumn, ManyToMany, ManyToOne, OneToMany } from 'typeorm';
-import { UserEntityDTO } from 'iam-pkg';
+import { Column, Entity, JoinTable, ManyToMany, OneToMany } from 'typeorm';
+import { UserEntityDTO } from '@spalx/iam-pkg';
 
 import BaseEntity from '@/entities/base.entity';
 import AuthCodeEntity from '@/entities/auth/auth-code.entity';
@@ -12,14 +12,14 @@ export default class UserEntity extends BaseEntity {
   @Column('text', { array: true })
   identities!: string[];
 
-  @Column({ default: '' })
-  password: string = '';
+  @Column({ type: 'varchar', default: '' })
+  password = '';
 
-  @Column({ default: true })
-  is_active: boolean = true;
+  @Column({ type: 'boolean', default: true })
+  is_active = true;
 
-  @Column({ default: false })
-  mfa_enabled: boolean = false;
+  @Column({ type: 'boolean', default: false })
+  mfa_enabled = false;
 
   @Column({
     type: 'text',
@@ -53,8 +53,8 @@ export default class UserEntity extends BaseEntity {
   output(): UserEntityDTO {
     return {
       id: this.id,
-      roles: this.roles?.map(role => role.output()),
-      meta: this.meta ?? {}
-    }
+      roles: this.roles?.map((role) => role.output()),
+      meta: this.meta ?? {},
+    };
   }
 }

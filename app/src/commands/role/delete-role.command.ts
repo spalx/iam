@@ -1,5 +1,5 @@
-import { DeleteRoleDTO } from 'iam-pkg';
-import { CorrelatedMessage } from 'transport-pkg';
+import { DeleteRoleDTO } from '@spalx/iam-pkg';
+import { CorrelatedMessage } from '@spalx/transport-pkg';
 
 import BaseCommand from '@/commands/base.command';
 import roleController from '@/controllers/role.controller';

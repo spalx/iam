@@ -7,10 +7,12 @@ import {
   DeleteRoleDTO,
   DeleteRoleDTOSchema,
   UpdateRoleDTO,
-  UpdateRoleDTOSchema
-} from 'iam-pkg';
-import { CorrelatedMessage } from 'transport-pkg';
-import { GetAllRestQueryParams, GetAllRestQueryParamsSchema, GetAllRestPaginatedResponse } from 'rest-pkg';
+  UpdateRoleDTOSchema,
+  DeleteRolesDTO,
+  DeleteRolesDTOSchema,
+} from '@spalx/iam-pkg';
+import { CorrelatedMessage } from '@spalx/transport-pkg';
+import { GetAllRestQueryParams, GetAllRestQueryParamsSchema, GetAllRestPaginatedResponse } from '@spalx/rest-pkg';
 
 import roleService from '@/services/role.service';
 
@@ -29,17 +31,28 @@ class RoleController {
     return role.output();
   }
 
-  async getRoles(req: CorrelatedMessage<GetAllRestQueryParams>): Promise<GetAllRestPaginatedResponse<RoleEntityDTO>> {
+  async getRoles(
+    req: CorrelatedMessage<GetAllRestQueryParams & { paginated?: string | boolean }>
+  ): Promise<GetAllRestPaginatedResponse<RoleEntityDTO>> {
     GetAllRestQueryParamsSchema.parse(req.data);
+    const isPaginated = req.data.paginated;
 
-    const { roles, count } = await roleService.getRoles(req.data);
-    return { results: roles.map(role => role.output()), count };
+    if (isPaginated) {
+      const { roles, count } = await roleService.getRoles(req.data);
+      return { results: roles.map((role) => role.output()), count };
+    }
+    const roles = await roleService.findAll();
+    return { results: roles.map((role) => role.output()), count: roles.length };
   }
 
   async deleteRole(req: CorrelatedMessage<DeleteRoleDTO>): Promise<void> {
     DeleteRoleDTOSchema.parse(req.data);
-
     await roleService.deleteRole(req.data);
+  }
+
+  async deleteRoles(req: CorrelatedMessage<DeleteRolesDTO>): Promise<void> {
+    DeleteRolesDTOSchema.parse(req.data);
+    await roleService.deleteRoles(req.data);
   }
 
   async updateRole(req: CorrelatedMessage<UpdateRoleDTO>): Promise<RoleEntityDTO> {

@@ -7,12 +7,13 @@ import {
   DeleteUserDTO,
   DeleteUserDTOSchema,
   UpdateUserDTO,
-  UpdateUserDTOSchema
-} from 'iam-pkg';
-import { CorrelatedMessage } from 'transport-pkg';
-import { GetAllRestQueryParams, GetAllRestQueryParamsSchema, GetAllRestPaginatedResponse } from 'rest-pkg';
+  UpdateUserDTOSchema,
+} from '@spalx/iam-pkg';
+import { CorrelatedMessage } from '@spalx/transport-pkg';
+import { GetAllRestQueryParams, GetAllRestQueryParamsSchema, GetAllRestPaginatedResponse } from '@spalx/rest-pkg';
 
 import userService from '@/services/user.service';
+import UsersDatasource from '@/datasources/users.datasource';
 
 class UserController {
   async createUser(req: CorrelatedMessage<CreateUserDTO>): Promise<UserEntityDTO> {
@@ -32,8 +33,13 @@ class UserController {
   async getUsers(req: CorrelatedMessage<GetAllRestQueryParams>): Promise<GetAllRestPaginatedResponse<UserEntityDTO>> {
     GetAllRestQueryParamsSchema.parse(req.data);
 
-    const { users, count } = await userService.getUsers(req.data);
-    return { results: users.map(user => user.output()), count };
+    const datasource = new UsersDatasource(req.data);
+    const [users, count] = await datasource.output();
+
+    return {
+      results: users.map((user) => user.output()),
+      count,
+    };
   }
 
   async deleteUser(req: CorrelatedMessage<DeleteUserDTO>): Promise<void> {

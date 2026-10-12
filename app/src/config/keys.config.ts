@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { JWT_KEY_ALGORITHM } from 'iam-pkg';
+import { JWT_KEY_ALGORITHM } from '@spalx/iam-pkg';
 
 import appConfig from '@/config/app.config';
 

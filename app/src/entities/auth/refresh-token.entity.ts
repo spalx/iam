@@ -25,6 +25,6 @@ export default class RefreshTokenEntity extends BaseEntity {
   @Column()
   expires_at!: Date;
 
-  @Column({ default: false })
-  revoked: boolean = false;
+  @Column({ type: 'boolean', default: false })
+  revoked = false;
 }

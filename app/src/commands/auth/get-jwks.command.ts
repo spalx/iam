@@ -1,5 +1,5 @@
-import { GetJWKSDTO, DidGetJWKSDTO } from 'iam-pkg';
-import { CorrelatedMessage } from 'transport-pkg';
+import { GetJWKSDTO, DidGetJWKSDTO } from '@spalx/iam-pkg';
+import { CorrelatedMessage } from '@spalx/transport-pkg';
 
 import BaseCommand from '@/commands/base.command';
 import authController from '@/controllers/auth.controller';

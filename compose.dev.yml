@@ -3,13 +3,18 @@ services:
     build:
       context: .
       target: builder
-    command: sh -c "pnpm typeorm:dev migration:run && pnpm run dev"
+    command: pnpm run dev
     volumes:
       - ./app:/app
       - iam-node-modules:/app/node_modules
+
   iam-db:
     ports:
       - 5452:5432
+
+  iam-db-backup:
+    environment:
+      - BKP_CRON_ENABLED=0
 
 volumes:
   iam-node-modules:

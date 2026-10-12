@@ -1,5 +1,5 @@
 abstract class BaseCommand {
-  abstract execute(data: object): Promise<object | void>;
+  abstract execute(data: object): Promise<unknown>;
 }
 
 export default BaseCommand;

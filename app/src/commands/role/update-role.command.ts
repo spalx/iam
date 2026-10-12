@@ -1,5 +1,5 @@
-import { UpdateRoleDTO, RoleEntityDTO } from 'iam-pkg';
-import { CorrelatedMessage } from 'transport-pkg';
+import { UpdateRoleDTO, RoleEntityDTO } from '@spalx/iam-pkg';
+import { CorrelatedMessage } from '@spalx/transport-pkg';
 
 import BaseCommand from '@/commands/base.command';
 import roleController from '@/controllers/role.controller';
