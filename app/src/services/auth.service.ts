@@ -79,6 +79,10 @@ class AuthService {
       throw new UnauthorizedError('MFA code expired');
     }
 
+    if (!authCode.user.is_active) {
+      throw new BadRequestError('User is not active');
+    }
+
     if (!authCode.user.mfa_enabled) {
       throw new BadRequestError('MFA authentication disabled');
     }
@@ -111,6 +115,12 @@ class AuthService {
       //TODO: in the future we can notify the user about this as a potential breach
 
       throw new UnauthorizedError('Invalid refresh token');
+    }
+
+    // Unauthorized rather than a bad request: callers end the session on it instead of retrying
+    if (!refreshToken.user.is_active) {
+      await this.revokeAllRefreshTokensByUser(refreshToken.user_id);
+      throw new UnauthorizedError('User is not active');
     }
 
     const minFingerprintsToMatch: number = Math.max(0, data.min_fingerprints_to_match ?? 0);

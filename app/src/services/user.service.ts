@@ -1,9 +1,10 @@
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { NotFoundError, BadRequestError } from '@spalx/rest-pkg';
 import { CreateUserDTO, UpdateUserDTO, GetUserDTO, DeleteUserDTO } from '@spalx/iam-pkg';
 
 import roleService from '@/services/role.service';
 import UserEntity from '@/entities/user/user.entity';
+import RefreshTokenEntity from '@/entities/auth/refresh-token.entity';
 import appDataSource from '@/common/db/app-data-source';
 import { sha256 } from '@/common/utils';
 import appConfig from '@/config/app.config';
@@ -61,10 +62,11 @@ class UserService {
 
     if (data.identities && data.identities.length > 0) {
       const identityInUse = await this.isAnyIdentityUsed(data.identities, user.id);
-
-      if (!identityInUse) {
-        user.identities = data.identities.map((identity) => this.hashIdentity(identity));
+      if (identityInUse) {
+        throw new BadRequestError(`User with identity ${identityInUse} already exists`);
       }
+
+      user.identities = data.identities.map((identity) => this.hashIdentity(identity));
     }
 
     if ('password' in data) {
@@ -85,6 +87,15 @@ class UserService {
 
     if (data.roles) {
       user.roles = await Promise.all(data.roles.map((roleName) => roleService.findRoleByName(roleName)));
+    }
+
+    if ('is_active' in data && !user.is_active) {
+      // Deactivation ends the user's sessions, so reactivating them later doesn't bring the old ones back
+      await appDataSource.transaction(async (manager: EntityManager) => {
+        await manager.save(user);
+        await manager.update(RefreshTokenEntity, { user_id: user.id }, { revoked: true });
+      });
+      return user;
     }
 
     await user.save();
