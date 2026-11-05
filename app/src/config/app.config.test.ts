@@ -11,6 +11,7 @@ const CONFIG_VARIABLES = [
   'REFRESH_TOKEN_EXPIRES_IN',
   'AUTH_CODE_EXPIRES_IN',
   'AUTH_CODE_LENGTH',
+  'AUTH_CODE_MAX_ATTEMPTS',
   'PASSWORD_SALT',
   'DB_USER',
   'DB_PASSWORD',
@@ -63,6 +64,7 @@ describe('appConfig', () => {
         REFRESH_TOKEN_EXPIRES_IN: '3600',
         AUTH_CODE_EXPIRES_IN: '30',
         AUTH_CODE_LENGTH: '8',
+        AUTH_CODE_MAX_ATTEMPTS: '3',
         PASSWORD_SALT: 'salt',
         DB_USER: 'identity-user',
         DB_PASSWORD: 'identity-secret',
@@ -86,6 +88,7 @@ describe('appConfig', () => {
           refresh_token_expires_in: 3600,
           auth_code_expires_in: 30,
           auth_code_length: 8,
+          auth_code_max_attempts: 3,
         },
         user: { password_salt: 'salt' },
         db: {
@@ -129,6 +132,17 @@ describe('appConfig', () => {
       expect(config.auth.auth_code_expires_in).toBeNaN();
       expect(config.auth.auth_code_length).toBeNaN();
     });
+  });
+
+  it.each(['', '0', '-2', '2.5', 'five'])(
+    'should allow 5 wrong codes per challenge when AUTH_CODE_MAX_ATTEMPTS is %p',
+    async (value) => {
+      expect((await loadConfig({ AUTH_CODE_MAX_ATTEMPTS: value })).auth.auth_code_max_attempts).toBe(5);
+    }
+  );
+
+  it('should allow 5 wrong codes per challenge when AUTH_CODE_MAX_ATTEMPTS is unset', async () => {
+    expect((await loadConfig({})).auth.auth_code_max_attempts).toBe(5);
   });
 
   it('should be frozen', async () => {

@@ -254,6 +254,41 @@ describe('list', () => {
     expect(ids).toEqual([anna.id, dan.id]);
   });
 
+  it('should find users by a list of ids, and by role names in or out of a list', async () => {
+    const byRole = (operator: RestFilterFieldOperator, ...values: string[]): GetAllRestQueryParams => ({
+      filters: [{ name: 'role_name', operator, values }],
+    });
+
+    expect(
+      (await listIds({ filters: [{ name: 'id', operator: RestFilterFieldOperator.In, values: [dana.id, anna.id] }] }))
+        .ids
+    ).toEqual([anna.id, dana.id]);
+    expect((await listIds(byRole(RestFilterFieldOperator.In, 'agent', 'support'))).ids).toEqual([anna.id, dan.id]);
+    expect((await listIds(byRole(RestFilterFieldOperator.NotIn, 'agent'))).ids).toEqual([dan.id, dana.id]);
+  });
+
+  it('should search the start of a name, an email or a phone', async () => {
+    const startsWith = (name: string, value: string): GetAllRestQueryParams => ({
+      filters: [{ name, operator: RestFilterFieldOperator.StartsWith, values: [value] }],
+    });
+
+    expect((await listIds(startsWith('name', 'Dan'))).ids).toEqual([dan.id, dana.id]);
+    expect((await listIds(startsWith('email', 'anna@'))).ids).toEqual([anna.id]);
+    expect((await listIds(startsWith('phone', '050'))).ids).toEqual([dan.id]);
+  });
+
+  it('should refuse a filter or sort name it does not offer', async () => {
+    await expect(
+      listIds({ filters: [{ name: 'id = id OR 1=1 --', operator: RestFilterFieldOperator.Equal, values: ['x'] }] })
+    ).rejects.toThrow('Unknown filter field id = id OR 1=1 --');
+    await expect(
+      listIds({ filters: [{ name: 'password', operator: RestFilterFieldOperator.Equal, values: [''] }] })
+    ).rejects.toThrow('Unknown filter field password');
+    await expect(
+      listIds({ sort: [{ sort_by: '(SELECT password FROM users LIMIT 1)', sort_direction: 1 }] })
+    ).rejects.toThrow('Unknown sort field (SELECT password FROM users LIMIT 1)');
+  });
+
   // Pinned as found: a limit without a page fails in SQL.
   it('should fail when a limit is given without a page', async () => {
     await expect(listIds({ limit: 2 })).rejects.toThrow('Provided "skip" value is not a number');

@@ -1,9 +1,9 @@
 import appDataSource from '@/common/db/app-data-source';
+import { hashPassword } from '@/common/password-hash';
 import { sha256 } from '@/common/utils';
 import AuthCodeEntity from '@/entities/auth/auth-code.entity';
 import RoleEntity from '@/entities/user/role.entity';
 import UserEntity from '@/entities/user/user.entity';
-import userService from '@/services/user.service';
 
 export interface RoleFields {
   name: string;
@@ -13,6 +13,8 @@ export interface RoleFields {
 export interface UserFields {
   identities: string[];
   password?: string;
+  // Stored as given, in place of a hash of `password`: for hashes of an older kind
+  stored_password?: string;
   is_active?: boolean;
   mfa_enabled?: boolean;
   meta?: Record<string, unknown> | null;
@@ -29,7 +31,7 @@ export async function saveRole(fields: RoleFields): Promise<RoleEntity> {
 export async function saveUser(fields: UserFields): Promise<UserEntity> {
   const user = Object.assign(new UserEntity(), {
     identities: fields.identities.map((identity) => sha256(identity)),
-    password: fields.password ? userService.hashPassword(fields.password) : '',
+    password: fields.stored_password ?? (fields.password ? await hashPassword(fields.password) : ''),
     is_active: fields.is_active ?? true,
     mfa_enabled: fields.mfa_enabled ?? false,
     meta: fields.meta ?? null,

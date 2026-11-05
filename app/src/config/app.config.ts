@@ -1,5 +1,12 @@
 import { IAppConfig } from '@/interfaces/app-config.interface';
 
+const DEFAULT_AUTH_CODE_MAX_ATTEMPTS = 5;
+
+function positiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return value && Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 const appConfig: IAppConfig = {
   app: {
     port: Number(process.env.PORT),
@@ -14,6 +21,7 @@ const appConfig: IAppConfig = {
     refresh_token_expires_in: Number(process.env.REFRESH_TOKEN_EXPIRES_IN),
     auth_code_expires_in: Number(process.env.AUTH_CODE_EXPIRES_IN),
     auth_code_length: Number(process.env.AUTH_CODE_LENGTH),
+    auth_code_max_attempts: positiveInteger(process.env.AUTH_CODE_MAX_ATTEMPTS, DEFAULT_AUTH_CODE_MAX_ATTEMPTS),
   },
   user: {
     password_salt: process.env.PASSWORD_SALT || '',

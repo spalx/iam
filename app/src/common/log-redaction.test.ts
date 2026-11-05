@@ -20,26 +20,7 @@ jest.mock('@spalx/common-loggers-pkg', () => ({
 
 const MESSAGE = Symbol.for('message');
 
-const SENSITIVE_KEYS = [
-  'access_token',
-  'refresh_token',
-  'token',
-  'mfa_code',
-  'password',
-  'card_number',
-  'ccno',
-  'cvv',
-  'mycvv',
-  'exp_date',
-  'expdate',
-  'expiry',
-  'expire_month',
-  'expire_year',
-  'expiry_month',
-  'expiry_year',
-  'exp_month',
-  'exp_year',
-];
+const SENSITIVE_KEYS = ['access_token', 'refresh_token', 'token', 'mfa_code', 'password'];
 
 function transportsOf(target: unknown): FakeTransport[] {
   return (target as { transports: FakeTransport[] }).transports;
@@ -63,7 +44,7 @@ describe('log-redaction - redactSensitiveFields', () => {
     });
 
     it.each(SENSITIVE_KEYS)('should mask a number %s', (key) => {
-      expect(redactSensitiveFields(`{"${key}":4580123412341234}`)).toBe(`{"${key}":"[REDACTED]"}`);
+      expect(redactSensitiveFields(`{"${key}":123456}`)).toBe(`{"${key}":"[REDACTED]"}`);
     });
 
     it.each([
@@ -71,7 +52,7 @@ describe('log-redaction - redactSensitiveFields', () => {
       ['a decimal', '12.5'],
       ['an exponent', '1.2e+5'],
     ])('should mask %s', (_label, value) => {
-      expect(redactSensitiveFields(`{"cvv":${value},"n":1}`)).toBe('{"cvv":"[REDACTED]","n":1}');
+      expect(redactSensitiveFields(`{"token":${value},"n":1}`)).toBe('{"token":"[REDACTED]","n":1}');
     });
 
     it('should mask a string that holds escaped quotes', () => {
@@ -91,8 +72,8 @@ describe('log-redaction - redactSensitiveFields', () => {
     });
 
     it('should mask an escaped number', () => {
-      expect(redactSensitiveFields('{"body":"{\\"card_number\\":4580123412341234}"}')).toBe(
-        '{"body":"{\\"card_number\\":\\"[REDACTED]\\"}"}'
+      expect(redactSensitiveFields('{"body":"{\\"mfa_code\\":123456}"}')).toBe(
+        '{"body":"{\\"mfa_code\\":\\"[REDACTED]\\"}"}'
       );
     });
   });
@@ -103,6 +84,7 @@ describe('log-redaction - redactSensitiveFields', () => {
       ['a sensitive word inside a value', '{"note":"password reset requested"}'],
       ['a longer key that starts with a sensitive one', '{"passwords":"x","tokens":["a"]}'],
       ['a sensitive word with no JSON', 'login failed for user u1: wrong password'],
+      ['a field that is not a credential', '{"card_number":"4580","cvv":"123","challenge_id":"abc"}'],
       ['an empty line', ''],
     ])('should not change %s', (_label, line) => {
       expect(redactSensitiveFields(line)).toBe(line);
@@ -110,10 +92,10 @@ describe('log-redaction - redactSensitiveFields', () => {
   });
 
   it('should mask several fields and both forms in one line', () => {
-    const line = '{"password":"a","ok":1,"token":2,"body":"{\\"cvv\\":\\"123\\"}"}';
+    const line = '{"password":"a","ok":1,"token":2,"body":"{\\"mfa_code\\":\\"X7k2Qp\\"}"}';
 
     expect(redactSensitiveFields(line)).toBe(
-      '{"password":"[REDACTED]","ok":1,"token":"[REDACTED]","body":"{\\"cvv\\":\\"[REDACTED]\\"}"}'
+      '{"password":"[REDACTED]","ok":1,"token":"[REDACTED]","body":"{\\"mfa_code\\":\\"[REDACTED]\\"}"}'
     );
   });
 });

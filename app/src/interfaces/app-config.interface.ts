@@ -12,6 +12,8 @@ export interface IAppConfig {
     refresh_token_expires_in: number;
     auth_code_expires_in: number;
     auth_code_length: number;
+    // Wrong codes a sign-in challenge accepts before it is spent
+    auth_code_max_attempts: number;
   };
   user: {
     password_salt: string;

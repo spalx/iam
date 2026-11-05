@@ -1,16 +1,42 @@
 import { SelectQueryBuilder, ObjectLiteral } from 'typeorm';
 import { createHash, randomUUID } from 'crypto';
-import { GetAllRestQueryParams, RestFilterFieldOperator } from '@spalx/rest-pkg';
+import { BadRequestError, GetAllRestQueryParams, RestFilterFieldOperator } from '@spalx/rest-pkg';
 
 export function sha256(str: string): string {
   return createHash('sha256').update(str).digest('hex');
 }
 
+function columnOf(columns: Record<string, string>, name: string): string | undefined {
+  return Object.hasOwn(columns, name) ? columns[name] : undefined;
+}
+
+/**
+ * Applies a list request to a query. Only the names in `columns` may be filtered or sorted by, and only those in
+ * `selectable` selected: caller text never becomes SQL, and values always go in as parameters.
+ */
 export function applyRestQueryParams<T extends ObjectLiteral>(
   qb: SelectQueryBuilder<T>,
   alias: string,
-  params: GetAllRestQueryParams
+  params: Partial<GetAllRestQueryParams>,
+  columns: Record<string, string>,
+  selectable: string[] = []
 ): SelectQueryBuilder<T> {
+  params.fields?.forEach((field) => {
+    if (!selectable.includes(field)) {
+      throw new BadRequestError(`Unknown field ${field}`);
+    }
+  });
+  params.filters?.forEach(({ name }) => {
+    if (!columnOf(columns, name)) {
+      throw new BadRequestError(`Unknown filter field ${name}`);
+    }
+  });
+  params.sort?.forEach(({ sort_by }) => {
+    if (!columnOf(columns, sort_by)) {
+      throw new BadRequestError(`Unknown sort field ${sort_by}`);
+    }
+  });
+
   // Fields
   if (params.fields && params.fields.length > 0) {
     const selects = params.fields.map((f) => `${alias}.${f}`);
@@ -20,7 +46,7 @@ export function applyRestQueryParams<T extends ObjectLiteral>(
   // Filters
   if (params.filters && params.filters.length > 0) {
     params.filters.forEach((filter, i) => {
-      const column = `${alias}.${filter.name}`;
+      const column = columnOf(columns, filter.name) as string;
       const paramName = `filter_${i}`;
       const values = filter.values;
 
@@ -92,7 +118,7 @@ export function applyRestQueryParams<T extends ObjectLiteral>(
   // Sorting
   if (params.sort && params.sort.length > 0) {
     params.sort.forEach((sortField) => {
-      qb.addOrderBy(`${alias}.${sortField.sort_by}`, sortField.sort_direction === -1 ? 'DESC' : 'ASC');
+      qb.addOrderBy(columnOf(columns, sortField.sort_by) as string, sortField.sort_direction === -1 ? 'DESC' : 'ASC');
     });
   } else {
     qb.addOrderBy(`${alias}.id`, 'DESC');

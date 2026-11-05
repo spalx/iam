@@ -7,6 +7,15 @@ import appDataSource from '@/common/db/app-data-source';
 import { applyRestQueryParams } from '@/common/utils';
 import UserService from '@/services/user.service';
 
+// The names a caller may filter or sort the role list by, and the fields it may select
+const ROLE_COLUMNS: Record<string, string> = {
+  id: 'role.id',
+  name: 'role.name',
+  created_at: 'role.created_at',
+  updated_at: 'role.updated_at',
+};
+const ROLE_SELECTABLE_FIELDS = ['name', 'permissions'];
+
 class RoleService {
   private get roleRepository(): Repository<RoleEntity> {
     return appDataSource.getRepository(RoleEntity);
@@ -91,15 +100,12 @@ class RoleService {
   }
 
   async getRoles(data: GetAllRestQueryParams): Promise<{ roles: RoleEntity[]; count: number }> {
-    const validFields = ['name', 'permissions'];
+    // Only these fields may be selected; asking for none of them selects every field
+    const requestedFields = Array.from(new Set(data.fields ?? [])).filter((f) => ROLE_SELECTABLE_FIELDS.includes(f));
 
-    // 1. Deduplicate and validate requested fields
-    const requestedFields = Array.from(new Set(data.fields ?? [])).filter((f) => validFields.includes(f));
-
-    // 2. Start query builder
     const qb = this.roleRepository.createQueryBuilder('role');
 
-    // 3. Extract exclude filter from data.filters if present
+    // `exclude` is not a column: it lists role names to leave out
     const excludeFilter = data.filters?.find((f) => f.name === 'exclude');
 
     if (excludeFilter && excludeFilter.values) {
@@ -114,20 +120,14 @@ class RoleService {
       }
     }
 
-    // 4. Call generic helper (filter out the synthetic 'exclude' field so it doesn't break generic query logic)
-    const remainingFilters = data.filters?.filter((f) => f.name !== 'exclude');
     const queryParams: Partial<GetAllRestQueryParams> = {
       ...data,
-      filters: remainingFilters,
+      filters: data.filters?.filter((f) => f.name !== 'exclude'),
+      fields: requestedFields,
     };
 
-    if (requestedFields.length > 0) {
-      queryParams.fields = requestedFields;
-    }
+    applyRestQueryParams(qb, 'role', queryParams, ROLE_COLUMNS, ROLE_SELECTABLE_FIELDS);
 
-    applyRestQueryParams(qb, 'role', queryParams);
-
-    // 4. Execute query
     const [roles, count] = await qb.getManyAndCount();
 
     return { roles, count };

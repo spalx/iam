@@ -4,7 +4,7 @@
   "packageManager": "pnpm@12.14.0",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "nodemon --signal SIGTERM --delay 300ms --watch 'src/**/*.ts' --exec 'ts-node -r tsconfig-paths/register' src/index.ts",
+    "dev": "nodemon --exitcrash --signal SIGTERM --delay 300ms --watch 'src/**/*.ts' --exec 'ts-node -r tsconfig-paths/register' src/index.ts",
     "build": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -21,7 +21,7 @@
   "dependencies": {
     "@spalx/app-life-cycle-pkg": "^1.1.0",
     "@spalx/common-loggers-pkg": "1.0.5",
-    "@spalx/http-transport-adapter": "1.0.11",
+    "@spalx/http-transport-adapter": "1.0.13",
     "@spalx/iam-pkg": "2.0.3",
     "@spalx/rest-pkg": "^1.0.8",
     "@spalx/service-discovery-pkg": "^1.0.8",

@@ -88,7 +88,7 @@ describe('UsersDatasource - without an encrypted filter', () => {
       sort: [{ sort_by: 'updated_at', sort_direction: 1 }],
     });
 
-    expect(builder.andWhere).toHaveBeenCalledWith('roles.name = :filter_role_name_0', { filter_role_name_0: 'admin' });
+    expect(builder.andWhere).toHaveBeenCalledWith('roles.name = :filter_0', { filter_0: 'admin' });
     expect(builder.orderBy).toHaveBeenCalledWith('user.updated_at', 'ASC');
   });
 
@@ -104,6 +104,23 @@ describe('UsersDatasource - without an encrypted filter', () => {
     await list({ limit: 5 });
 
     expect(builder.skip).toHaveBeenCalledWith(NaN);
+  });
+});
+
+describe('UsersDatasource - unknown names', () => {
+  it.each(['password', 'identities', 'first_name', 'meta'])(
+    'should refuse the filter %p without reading any user',
+    async (name) => {
+      await expect(list({ filters: [filter(name, RestFilterFieldOperator.Equal, 'x')] })).rejects.toThrow(
+        `Unknown filter field ${name}`
+      );
+      expect(builder.getMany).not.toHaveBeenCalled();
+      expect(builder.getManyAndCount).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['email', 'name', 'password'])('should refuse to sort by %p', async (name) => {
+    await expect(list({ sort: [{ sort_by: name, sort_direction: 1 }] })).rejects.toThrow(`Unknown sort field ${name}`);
   });
 });
 
@@ -147,9 +164,7 @@ describe('UsersDatasource - email and phone', () => {
       ],
     });
 
-    expect(builder.andWhere).toHaveBeenCalledWith('user.is_active = :filter_is_active_0', {
-      filter_is_active_0: 'true',
-    });
+    expect(builder.andWhere).toHaveBeenCalledWith('user.is_active = :filter_0', { filter_0: 'true' });
   });
 });
 

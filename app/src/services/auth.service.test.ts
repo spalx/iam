@@ -2,7 +2,11 @@ import { createHash, createPublicKey } from 'crypto';
 import jwt, { JwtHeader, JwtPayload } from 'jsonwebtoken';
 import { BadRequestError, NotFoundError, UnauthorizedError } from '@spalx/rest-pkg';
 
+import { LessThan } from 'typeorm';
+
+import { hashAuthCode } from '@/common/auth-code-hash';
 import appDataSource from '@/common/db/app-data-source';
+import { hashPassword, verifyPassword } from '@/common/password-hash';
 import { keys } from '@/config/keys.config';
 import AuthCodeEntity from '@/entities/auth/auth-code.entity';
 import RefreshTokenEntity from '@/entities/auth/refresh-token.entity';
@@ -18,10 +22,48 @@ jest.mock('@/common/db/app-data-source', () => ({
 
 const NOW = new Date('2026-10-19T10:00:00.000Z');
 const PASSWORD = 'correct horse';
+// A scrypt hash of PASSWORD, made once: scrypt is slow on purpose
+let PASSWORD_HASH: string;
+// The hash used before scrypt, with the unit test environment's PASSWORD_SALT
+const OLD_PASSWORD_HASH = createHash('sha256').update(`${PASSWORD}test-password-salt`).digest('hex');
+
+beforeAll(async () => {
+  PASSWORD_HASH = await hashPassword(PASSWORD);
+});
 
 const refreshTokenRepository = { findOne: jest.fn(), update: jest.fn() };
-const authCodeRepository = { findOne: jest.fn(), remove: jest.fn() };
-const manager = { save: jest.fn(), remove: jest.fn() };
+const authCodeRepository = { findOne: jest.fn(), delete: jest.fn(), createQueryBuilder: jest.fn() };
+const manager = { save: jest.fn(), remove: jest.fn(), delete: jest.fn() };
+const userRepository = { update: jest.fn() };
+const CHALLENGE = 'Yq3w9m1Zb7Lh0sXc2VtR8nKp4JdFe6Ga5UiOy-_AAAA';
+
+// The UPDATE … RETURNING that reserves one try of a challenge.
+interface FakeReservation {
+  update: jest.Mock;
+  set: jest.Mock;
+  where: jest.Mock;
+  returning: jest.Mock;
+  execute: jest.Mock;
+}
+let reservation: FakeReservation;
+
+function buildReservation(): FakeReservation {
+  const fake = {} as FakeReservation;
+  fake.update = jest.fn(() => fake);
+  fake.set = jest.fn(() => fake);
+  fake.where = jest.fn(() => fake);
+  fake.returning = jest.fn(() => fake);
+  fake.execute = jest.fn().mockResolvedValue({ raw: [] });
+  return fake;
+}
+
+// The row a reserved try returns, as stored.
+function reserved(authCode: AuthCodeEntity): void {
+  reservation.execute.mockResolvedValueOnce({
+    raw: [{ id: authCode.id, code_hash: authCode.code_hash, attempts: authCode.attempts + 1 }],
+  });
+  authCodeRepository.findOne.mockResolvedValueOnce(authCode);
+}
 let refreshTokenSave: jest.SpyInstance;
 let authCodeSave: jest.SpyInstance;
 
@@ -34,7 +76,7 @@ function buildUser(overrides: Partial<UserEntity> = {}): UserEntity {
   return Object.assign(new UserEntity(), {
     id: 'user-1',
     identities: [sha256('dana@example.com')],
-    password: userService.hashPassword(PASSWORD),
+    password: PASSWORD_HASH,
     is_active: true,
     mfa_enabled: false,
     roles: [role],
@@ -63,8 +105,9 @@ function buildAuthCode(overrides: Partial<AuthCodeEntity> = {}): AuthCodeEntity 
     id: 'code-1',
     user_id: user.id,
     user,
-    mfa_code: '654321',
-    challenge_id: 'abc123',
+    code_hash: hashAuthCode(CHALLENGE, '654321'),
+    challenge_id: CHALLENGE,
+    attempts: 0,
     expires_at: new Date(NOW.getTime() + 45_000),
     ...overrides,
   });
@@ -89,16 +132,23 @@ function savedRefreshToken(): RefreshTokenEntity {
 
 beforeEach(() => {
   // Drops any one-off value a test arranged and didn't use.
-  [...Object.values(refreshTokenRepository), ...Object.values(authCodeRepository), ...Object.values(manager)].forEach(
-    (mock) => mock.mockReset()
-  );
+  [
+    ...Object.values(refreshTokenRepository),
+    ...Object.values(authCodeRepository),
+    ...Object.values(manager),
+    ...Object.values(userRepository),
+  ].forEach((mock) => mock.mockReset());
   // The real password hashing, with the user lookup replaced.
   jest.spyOn(userService, 'findUserByIdentity').mockRejectedValue(new Error('findUserByIdentity not arranged'));
   jest.useFakeTimers({ now: NOW, doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
   jest
     .mocked(appDataSource.getRepository)
     .mockImplementation(((target: unknown) =>
-      target === RefreshTokenEntity ? refreshTokenRepository : authCodeRepository) as never);
+      target === RefreshTokenEntity
+        ? refreshTokenRepository
+        : target === UserEntity
+          ? userRepository
+          : authCodeRepository) as never);
   jest.mocked(appDataSource.transaction).mockImplementation(async (run) => run(manager as never) as never);
   refreshTokenSave = jest.spyOn(RefreshTokenEntity.prototype, 'save').mockImplementation(async function (this: never) {
     return this;
@@ -108,6 +158,10 @@ beforeEach(() => {
   });
   manager.save.mockImplementation(async (entity: unknown) => entity);
   authCodeRepository.findOne.mockResolvedValue(null);
+  authCodeRepository.delete.mockResolvedValue({ affected: 0 });
+  manager.delete.mockResolvedValue({ affected: 1 });
+  reservation = buildReservation();
+  authCodeRepository.createQueryBuilder.mockReturnValue(reservation);
 });
 
 afterEach(() => {
@@ -217,6 +271,32 @@ describe('AuthService - createToken', () => {
     });
   });
 
+  describe('should_upgrade_an_old_password_hash_when_the_password_matches_it', () => {
+    it('should sign in and store a scrypt hash of the password, revoking nothing', async () => {
+      // Arrange
+      jest.mocked(userService.findUserByIdentity).mockResolvedValueOnce(buildUser({ password: OLD_PASSWORD_HASH }));
+
+      // Act
+      const tokens = await authService.createToken({ identity: 'dana@example.com', password: PASSWORD });
+
+      // Assert
+      expect(tokens.access_token).toBeTruthy();
+      const [where, values] = userRepository.update.mock.calls[0];
+      expect(where).toEqual({ id: 'user-1' });
+      expect((await verifyPassword(PASSWORD, values.password)).ok).toBe(true);
+      expect(refreshTokenRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('should refuse a wrong password and leave the old hash', async () => {
+      jest.mocked(userService.findUserByIdentity).mockResolvedValueOnce(buildUser({ password: OLD_PASSWORD_HASH }));
+
+      await expect(authService.createToken({ identity: 'dana@example.com', password: 'wrong' })).rejects.toStrictEqual(
+        new UnauthorizedError('Invalid credentials')
+      );
+      expect(userRepository.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('should_refuse_when_the_user_cannot_sign_in_with_a_password', () => {
     it('should pass on that the identity is unknown', async () => {
       const error = new NotFoundError('User not found');
@@ -255,38 +335,74 @@ describe('AuthService - createToken', () => {
 
 describe('AuthService - authenticate', () => {
   describe('should_issue_a_code_and_challenge_when_an_active_mfa_user_may_sign_in', () => {
-    it.each([PASSWORD, undefined])('should save and return a code for the password %p', async (password) => {
-      // Arrange
-      jest.mocked(userService.findUserByIdentity).mockResolvedValueOnce(buildUser({ mfa_enabled: true }));
+    it.each([PASSWORD, undefined])(
+      'should save a hash of the code and return the code for the password %p',
+      async (password) => {
+        // Arrange
+        jest.mocked(userService.findUserByIdentity).mockResolvedValueOnce(buildUser({ mfa_enabled: true }));
 
-      // Act
-      const result = await authService.authenticate({ identity: 'dana@example.com', password });
+        // Act
+        const result = await authService.authenticate({ identity: 'dana@example.com', password });
 
-      // Assert
-      expect(result.mfa_code).toMatch(/^[A-Za-z0-9_-]{6}$/);
-      expect(result.challenge_id).toMatch(/^[A-Za-z0-9_-]{6}$/);
-      expect(authCodeSave).toHaveBeenCalledTimes(1);
-      expect(authCodeSave.mock.instances[0]).toMatchObject({
-        user_id: 'user-1',
-        mfa_code: result.mfa_code,
-        challenge_id: result.challenge_id,
-        expires_at: new Date(NOW.getTime() + 45 * 1000),
-      });
+        // Assert
+        expect(result.mfa_code).toMatch(/^[A-Za-z0-9_-]{6}$/);
+        expect(result.challenge_id).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        expect(authCodeSave).toHaveBeenCalledTimes(1);
+        const saved = authCodeSave.mock.instances[0] as AuthCodeEntity;
+        expect(saved).toMatchObject({
+          user_id: 'user-1',
+          code_hash: hashAuthCode(result.challenge_id, result.mfa_code),
+          challenge_id: result.challenge_id,
+          attempts: 0,
+          expires_at: new Date(NOW.getTime() + 45 * 1000),
+        });
+        expect(Object.values(saved)).not.toContain(result.mfa_code);
+      }
+    );
+
+    it('should make a new challenge each time', async () => {
+      jest.mocked(userService.findUserByIdentity).mockResolvedValue(buildUser({ mfa_enabled: true }));
+
+      const first = await authService.authenticate({ identity: 'dana@example.com' });
+      const second = await authService.authenticate({ identity: 'dana@example.com' });
+
+      expect(first.challenge_id).not.toBe(second.challenge_id);
     });
 
-    it('should generate another code when the user already has the one drawn', async () => {
-      // Arrange
+    it("should delete every expired code, by IAM's clock, before saving the new one", async () => {
       jest.mocked(userService.findUserByIdentity).mockResolvedValueOnce(buildUser({ mfa_enabled: true }));
-      authCodeRepository.findOne.mockResolvedValueOnce(buildAuthCode()).mockResolvedValueOnce(null);
 
-      // Act
-      const result = await authService.authenticate({ identity: 'dana@example.com', password: PASSWORD });
+      await authService.authenticate({ identity: 'dana@example.com' });
 
-      // Assert
-      expect(authCodeRepository.findOne).toHaveBeenCalledTimes(2);
-      const [first, second] = authCodeRepository.findOne.mock.calls.map(([options]) => options.where);
-      expect(first).toEqual({ mfa_code: expect.any(String), user_id: 'user-1' });
-      expect(second).toEqual({ mfa_code: result.mfa_code, user_id: 'user-1' });
+      expect(authCodeRepository.delete).toHaveBeenCalledWith({ expires_at: LessThan(NOW) });
+      expect(authCodeRepository.delete.mock.invocationCallOrder[0]).toBeLessThan(
+        authCodeSave.mock.invocationCallOrder[0]
+      );
+    });
+  });
+
+  describe('should_upgrade_an_old_password_hash_when_a_code_is_asked_for_with_the_password', () => {
+    it('should issue a code and store a scrypt hash of the password', async () => {
+      jest
+        .mocked(userService.findUserByIdentity)
+        .mockResolvedValueOnce(buildUser({ mfa_enabled: true, password: OLD_PASSWORD_HASH }));
+
+      await authService.authenticate({ identity: 'dana@example.com', password: PASSWORD });
+
+      expect(authCodeSave).toHaveBeenCalledTimes(1);
+      expect(userRepository.update).toHaveBeenCalledTimes(1);
+      expect((await verifyPassword(PASSWORD, userRepository.update.mock.calls[0][1].password)).ok).toBe(true);
+    });
+
+    it('should leave the stored hash alone when no password is given', async () => {
+      jest
+        .mocked(userService.findUserByIdentity)
+        .mockResolvedValueOnce(buildUser({ mfa_enabled: true, password: OLD_PASSWORD_HASH }));
+
+      await authService.authenticate({ identity: 'dana@example.com' });
+
+      expect(authCodeSave).toHaveBeenCalledTimes(1);
+      expect(userRepository.update).not.toHaveBeenCalled();
     });
   });
 
@@ -321,22 +437,27 @@ describe('AuthService - authenticate', () => {
 });
 
 describe('AuthService - createMFAToken', () => {
-  it('should delete the code and save the new refresh token in one transaction', async () => {
+  it('should reserve a try, then delete the code and save the new refresh token in one transaction', async () => {
     // Arrange
     const authCode = buildAuthCode();
-    authCodeRepository.findOne.mockResolvedValueOnce(authCode);
+    reserved(authCode);
 
     // Act
     const result = await authService.createMFAToken({
-      challenge_id: 'abc123',
+      challenge_id: CHALLENGE,
       mfa_code: '654321',
       fingerprints: ['browser'],
     });
 
     // Assert
-    expect(authCodeRepository.findOne).toHaveBeenCalledWith({ where: { mfa_code: '654321', challenge_id: 'abc123' } });
+    expect(reservation.update).toHaveBeenCalledWith(AuthCodeEntity);
+    expect(reservation.where).toHaveBeenCalledWith('challenge_id = :challengeId AND attempts < :maxAttempts', {
+      challengeId: CHALLENGE,
+      maxAttempts: 5,
+    });
+    expect(reservation.set.mock.calls[0][0].attempts()).toBe('attempts + 1');
     expect(appDataSource.transaction).toHaveBeenCalledTimes(1);
-    expect(manager.remove).toHaveBeenCalledWith(authCode);
+    expect(manager.delete).toHaveBeenCalledWith(AuthCodeEntity, { id: authCode.id });
     expect(savedRefreshToken()).toMatchObject({
       token: sha256(result.refresh_token),
       fingerprints: [sha256('browser')],
@@ -345,36 +466,76 @@ describe('AuthService - createMFAToken', () => {
     expect(decode(result.access_token).payload.user).toEqual(authCode.user.output());
   });
 
-  it('should refuse an unknown code', async () => {
-    await expect(authService.createMFAToken({ challenge_id: 'abc123', mfa_code: '000000' })).rejects.toStrictEqual(
+  it('should refuse an unknown or spent challenge without comparing any code', async () => {
+    await expect(authService.createMFAToken({ challenge_id: CHALLENGE, mfa_code: '654321' })).rejects.toStrictEqual(
+      new NotFoundError('Auth code not found')
+    );
+    expect(authCodeRepository.findOne).not.toHaveBeenCalled();
+  });
+
+  it('should refuse a wrong code like an unknown one, and keep the challenge while tries remain', async () => {
+    reserved(buildAuthCode({ attempts: 3 }));
+
+    await expect(authService.createMFAToken({ challenge_id: CHALLENGE, mfa_code: '000000' })).rejects.toStrictEqual(
+      new NotFoundError('Auth code not found')
+    );
+    expect(authCodeRepository.delete).not.toHaveBeenCalled();
+    expect(appDataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it('should delete the challenge on the last wrong code it allows', async () => {
+    const authCode = buildAuthCode({ attempts: 4 });
+    reserved(authCode);
+
+    await expect(authService.createMFAToken({ challenge_id: CHALLENGE, mfa_code: '000000' })).rejects.toStrictEqual(
+      new NotFoundError('Auth code not found')
+    );
+    expect(authCodeRepository.delete).toHaveBeenCalledWith({ id: authCode.id });
+  });
+
+  it('should refuse the right code when another request used it first', async () => {
+    reserved(buildAuthCode());
+    manager.delete.mockResolvedValueOnce({ affected: 0 });
+
+    await expect(authService.createMFAToken({ challenge_id: CHALLENGE, mfa_code: '654321' })).rejects.toStrictEqual(
+      new NotFoundError('Auth code not found')
+    );
+    expect(manager.save).not.toHaveBeenCalled();
+  });
+
+  it('should refuse the right code when its row is gone after the try was reserved', async () => {
+    const authCode = buildAuthCode();
+    reservation.execute.mockResolvedValueOnce({
+      raw: [{ id: authCode.id, code_hash: authCode.code_hash, attempts: 1 }],
+    });
+
+    await expect(authService.createMFAToken({ challenge_id: CHALLENGE, mfa_code: '654321' })).rejects.toStrictEqual(
       new NotFoundError('Auth code not found')
     );
   });
 
-  it('should refuse an expired code', async () => {
-    authCodeRepository.findOne.mockResolvedValueOnce(buildAuthCode({ expires_at: new Date(NOW.getTime() - 1) }));
+  it('should refuse the right code after it expired, and keep the challenge', async () => {
+    reserved(buildAuthCode({ expires_at: new Date(NOW.getTime() - 1) }));
 
-    await expect(authService.createMFAToken({ challenge_id: 'abc123', mfa_code: '654321' })).rejects.toStrictEqual(
+    await expect(authService.createMFAToken({ challenge_id: CHALLENGE, mfa_code: '654321' })).rejects.toStrictEqual(
       new UnauthorizedError('MFA code expired')
     );
-    expect(manager.remove).not.toHaveBeenCalled();
+    expect(manager.delete).not.toHaveBeenCalled();
   });
 
   it('should refuse a code whose user has since turned MFA off', async () => {
-    authCodeRepository.findOne.mockResolvedValueOnce(buildAuthCode({ user: buildUser({ mfa_enabled: false }) }));
+    reserved(buildAuthCode({ user: buildUser({ mfa_enabled: false }) }));
 
-    await expect(authService.createMFAToken({ challenge_id: 'abc123', mfa_code: '654321' })).rejects.toStrictEqual(
+    await expect(authService.createMFAToken({ challenge_id: CHALLENGE, mfa_code: '654321' })).rejects.toStrictEqual(
       new BadRequestError('MFA authentication disabled')
     );
     expect(appDataSource.transaction).not.toHaveBeenCalled();
   });
 
   it('should refuse a code whose user has since been deactivated, and issue no token', async () => {
-    authCodeRepository.findOne.mockResolvedValueOnce(
-      buildAuthCode({ user: buildUser({ mfa_enabled: true, is_active: false }) })
-    );
+    reserved(buildAuthCode({ user: buildUser({ mfa_enabled: true, is_active: false }) }));
 
-    await expect(authService.createMFAToken({ challenge_id: 'abc123', mfa_code: '654321' })).rejects.toStrictEqual(
+    await expect(authService.createMFAToken({ challenge_id: CHALLENGE, mfa_code: '654321' })).rejects.toStrictEqual(
       new BadRequestError('User is not active')
     );
     expect(appDataSource.transaction).not.toHaveBeenCalled();

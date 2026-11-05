@@ -1,7 +1,9 @@
 import { createHash } from 'crypto';
 import { BadRequestError, NotFoundError } from '@spalx/rest-pkg';
+import { logger } from '@spalx/common-loggers-pkg';
 
 import appDataSource from '@/common/db/app-data-source';
+import { hashPassword, verifyPassword } from '@/common/password-hash';
 import RefreshTokenEntity from '@/entities/auth/refresh-token.entity';
 import RoleEntity from '@/entities/user/role.entity';
 import UserEntity from '@/entities/user/user.entity';
@@ -34,7 +36,7 @@ function buildQueryChain(): QueryChain {
   return chain;
 }
 
-const userRepository = { createQueryBuilder: jest.fn(), findOneBy: jest.fn(), remove: jest.fn() };
+const userRepository = { createQueryBuilder: jest.fn(), findOneBy: jest.fn(), remove: jest.fn(), update: jest.fn() };
 const manager = { save: jest.fn(), update: jest.fn() };
 let chain: QueryChain;
 let userSave: jest.SpyInstance;
@@ -92,9 +94,65 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('UserService - hashPassword', () => {
-  it('should hash the password with the service salt', () => {
-    expect(userService.hashPassword('secret')).toBe(sha256('secret' + 'test-password-salt'));
+async function signsInWith(stored: string, password: string): Promise<boolean> {
+  return (await verifyPassword(password, stored)).ok;
+}
+
+describe('UserService - checkPassword', () => {
+  it('should accept the right password of a current hash and change nothing', async () => {
+    const user = buildUser({ password: await hashPassword('secret') });
+
+    expect(await userService.checkPassword(user, 'secret')).toBe(true);
+    expect(userRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('should accept the right password of an old hash and store a scrypt hash in its place', async () => {
+    // Arrange
+    const user = buildUser({ password: sha256('secret' + 'test-password-salt') });
+
+    // Act
+    const ok = await userService.checkPassword(user, 'secret');
+
+    // Assert
+    expect(ok).toBe(true);
+    expect(userRepository.update).toHaveBeenCalledTimes(1);
+    const [where, values] = userRepository.update.mock.calls[0];
+    expect(where).toEqual({ id: USER_ID });
+    expect(values.password).toMatch(/^scrypt\$/);
+    expect(await signsInWith(values.password, 'secret')).toBe(true);
+    expect(user.password).toBe(values.password);
+    expect(appDataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it('should still accept the password when the upgrade cannot be saved, and log it without the password', async () => {
+    // Arrange
+    const stored = sha256('secret' + 'test-password-salt');
+    const user = buildUser({ password: stored });
+    userRepository.update.mockRejectedValueOnce(new Error('connection lost'));
+
+    // Act
+    const ok = await userService.checkPassword(user, 'secret');
+
+    // Assert
+    expect(ok).toBe(true);
+    expect(user.password).toBe(stored);
+    expect(logger.warn).toHaveBeenCalledWith('Could not upgrade a password hash', {
+      userId: USER_ID,
+      error: 'connection lost',
+    });
+    expect(JSON.stringify(jest.mocked(logger.warn).mock.calls)).not.toContain('secret');
+  });
+
+  it.each([
+    ['a wrong password', sha256('secret' + 'test-password-salt'), 'wrong'],
+    ['no stored password', '', 'secret'],
+    ['an unknown kind of hash', 'md5:5ebe2294ecd0e0f08eab7690d2a6ee69', 'secret'],
+  ])('should refuse %s and change nothing', async (_name, stored, password) => {
+    const user = buildUser({ password: stored });
+
+    expect(await userService.checkPassword(user, password)).toBe(false);
+    expect(userRepository.update).not.toHaveBeenCalled();
+    expect(user.password).toBe(stored);
   });
 });
 
@@ -140,11 +198,12 @@ describe('UserService - createUser', () => {
       expect(userSave.mock.instances).toEqual([user]);
       expect(user).toMatchObject({
         identities: [sha256('dana@example.com'), sha256('0501234567')],
-        password: sha256('secret' + 'test-password-salt'),
+        password: expect.stringMatching(/^scrypt\$/),
         mfa_enabled: true,
         is_active: true,
         meta: { first_name: 'Dana' },
       });
+      expect(await signsInWith(user.password, 'secret')).toBe(true);
       expect(user.roles.map((role) => role.name)).toEqual(['admin', 'agent']);
     });
 
@@ -225,10 +284,11 @@ describe('UserService - updateUser', () => {
 
     expect(user).toMatchObject({
       identities: [sha256('noa@example.com')],
-      password: sha256('new-password' + 'test-password-salt'),
+      password: expect.stringMatching(/^scrypt\$/),
       mfa_enabled: true,
       is_active: false,
     });
+    expect(await signsInWith(user.password, 'new-password')).toBe(true);
     expect(user.roles.map((role) => role.name)).toEqual(['admin']);
   });
 
@@ -326,6 +386,50 @@ describe('UserService - updateUser', () => {
 
       expect(manager.update).not.toHaveBeenCalled();
       expect(userSave).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('should_end_the_user_sessions_when_the_update_changes_their_password', () => {
+    it('should save a new password and revoke all their refresh tokens in one transaction', async () => {
+      await userService.updateUser({ id: USER_ID, password: 'new-password' });
+
+      expect(appDataSource.transaction).toHaveBeenCalledTimes(1);
+      expect(manager.save).toHaveBeenCalledWith(user);
+      expect(manager.update).toHaveBeenCalledWith(RefreshTokenEntity, { user_id: USER_ID }, { revoked: true });
+      expect(await signsInWith(user.password, 'new-password')).toBe(true);
+      expect(userSave).not.toHaveBeenCalled();
+    });
+
+    it('should revoke them when an existing password is cleared', async () => {
+      await userService.updateUser({ id: USER_ID, password: '' });
+
+      expect(user.password).toBe('');
+      expect(manager.update).toHaveBeenCalledWith(RefreshTokenEntity, { user_id: USER_ID }, { revoked: true });
+    });
+
+    it('should fail the update when the tokens cannot be revoked', async () => {
+      const error = new Error('deadlock detected');
+      manager.update.mockRejectedValueOnce(error);
+
+      await expect(userService.updateUser({ id: USER_ID, password: 'new-password' })).rejects.toBe(error);
+    });
+
+    it.each([undefined, ''])(
+      'should leave the tokens alone when a user without a password is given %p',
+      async (password) => {
+        user.password = '';
+
+        await userService.updateUser({ id: USER_ID, password });
+
+        expect(manager.update).not.toHaveBeenCalled();
+        expect(userSave).toHaveBeenCalledTimes(1);
+      }
+    );
+
+    it('should leave the tokens alone when the update has no password field', async () => {
+      await userService.updateUser({ id: USER_ID, mfa_enabled: true });
+
+      expect(manager.update).not.toHaveBeenCalled();
     });
   });
 });

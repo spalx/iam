@@ -17,6 +17,9 @@ class UsersDatasource extends Datasource<UserEntity> {
     updated_at: 'user.updated_at',
   };
 
+  // Searched in memory, after the details are decrypted.
+  protected handledFilterNames: string[] = ['name', 'email', 'phone'];
+
   constructor(readonly params: GetAllRestQueryParams) {
     const userRepository: Repository<UserEntity> = appDataSource.getRepository(UserEntity);
     super(userRepository, params);

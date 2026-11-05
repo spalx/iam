@@ -1,5 +1,5 @@
 import { SelectQueryBuilder, Repository } from 'typeorm';
-import { GetAllRestQueryParams, RestFilterField, RestFilterFieldOperator } from '@spalx/rest-pkg';
+import { BadRequestError, GetAllRestQueryParams, RestFilterField, RestFilterFieldOperator } from '@spalx/rest-pkg';
 
 export abstract class Datasource<Entity, Output = Entity> {
   protected builder: SelectQueryBuilder<Entity>;
@@ -13,7 +13,10 @@ export abstract class Datasource<Entity, Output = Entity> {
 
   protected abstract alias(): string;
 
+  // The only names a caller may filter or sort by, each mapped to its column. Caller text never becomes SQL.
   protected fieldMap: Record<string, string> = {};
+  // Filter names a subclass takes out in transformFilters and applies itself.
+  protected handledFilterNames: string[] = [];
   protected get globalFields(): string[] {
     return [];
   }
@@ -36,14 +39,31 @@ export abstract class Datasource<Entity, Output = Entity> {
       return;
     }
 
+    sort.forEach(({ sort_by }) => {
+      if (sort_by && !this.column(sort_by)) {
+        throw new BadRequestError(`Unknown sort field ${sort_by}`);
+      }
+    });
+
     const sortField = sort[0].sort_by;
     const sortDirection = sort[0].sort_direction;
     const sortOrder = sortDirection == 1 ? 'ASC' : 'DESC';
-    const dbField = this.fieldMap[sortField] ?? `${this.alias()}.${sortField}`;
 
     if (sortField) {
-      this.builder.orderBy(dbField, sortOrder);
+      this.builder.orderBy(this.column(sortField) as string, sortOrder);
     }
+  }
+
+  private column(name: string): string | undefined {
+    return Object.hasOwn(this.fieldMap, name) ? this.fieldMap[name] : undefined;
+  }
+
+  private assertFilterNamesKnown(filters: RestFilterField[]): void {
+    filters.forEach(({ name }) => {
+      if (!this.column(name) && !this.handledFilterNames.includes(name)) {
+        throw new BadRequestError(`Unknown filter field ${name}`);
+      }
+    });
   }
 
   protected buildPagination(): void {
@@ -71,6 +91,7 @@ export abstract class Datasource<Entity, Output = Entity> {
       return;
     }
 
+    this.assertFilterNamesKnown(this.params.filters);
     const filters = this.transformFilters([...this.params.filters]);
 
     filters.forEach((filter, index) => {
@@ -80,8 +101,11 @@ export abstract class Datasource<Entity, Output = Entity> {
         return;
       }
 
-      const dbField = this.fieldMap[name] ?? `${this.alias()}.${name}`;
-      const paramName = `filter_${name}_${index}`;
+      const dbField = this.column(name);
+      if (!dbField) {
+        throw new BadRequestError(`Unknown filter field ${name}`);
+      }
+      const paramName = `filter_${index}`;
 
       switch (operator) {
         case RestFilterFieldOperator.Equal:
@@ -158,9 +182,9 @@ export abstract class Datasource<Entity, Output = Entity> {
 
         case RestFilterFieldOperator.Between:
           if (values.length >= 2) {
-            this.builder.andWhere(`${dbField} BETWEEN :${paramName}Start AND :${paramName}End`, {
-              [`${paramName}Start`]: values[0],
-              [`${paramName}End`]: values[1],
+            this.builder.andWhere(`${dbField} BETWEEN :${paramName}_start AND :${paramName}_end`, {
+              [`${paramName}_start`]: values[0],
+              [`${paramName}_end`]: values[1],
             });
           }
           break;

@@ -6,7 +6,8 @@ import { TEST_KEY_FILES } from './test-keys';
 // set are kept, so the integration global setup can supply the real database connection.
 const TEST_ENV: Record<string, string> = {
   NODE_ENV: 'test',
-  TZ: 'Asia/Jerusalem',
+  // A fixed offset away from UTC, so a test catches IAM's times and the database's being mixed
+  TZ: 'Etc/GMT-3',
   PORT: '3030',
   HOST: 'iam',
   DB_HOST: 'localhost',

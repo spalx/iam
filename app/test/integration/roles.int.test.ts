@@ -156,6 +156,40 @@ describe('list', () => {
     expect(names).toEqual(expected);
   });
 
+  it('should return every field when none of the fields asked for is allowed', async () => {
+    const { results } = await roleController.getRoles(
+      request({
+        paginated: true,
+        fields: ['(SELECT password FROM users LIMIT 1)'],
+        sort: [{ sort_by: 'name', sort_direction: 1 }],
+        limit: 1,
+      })
+    );
+
+    expect(results).toEqual([{ id: roles[0].id, name: 'admin', permissions: ['admin.all'] }]);
+  });
+
+  it('should refuse a sort or filter name it does not offer, and leave the table as it was', async () => {
+    await expect(paginated({ sort: [{ sort_by: 'name; DROP TABLE roles', sort_direction: 1 }] })).rejects.toThrow(
+      'Unknown sort field name; DROP TABLE roles'
+    );
+    await expect(
+      paginated({ filters: [{ name: 'permissions', operator: RestFilterFieldOperator.Equal, values: ['x'] }] })
+    ).rejects.toThrow('Unknown filter field permissions');
+
+    expect(await roleNames()).toEqual(['admin', 'agent', 'manager', 'viewer']);
+  });
+
+  it('should match a value that looks like SQL only literally', async () => {
+    expect((await paginated({ filters: [filter(RestFilterFieldOperator.Equal, "x' OR '1'='1")] })).names).toEqual([]);
+
+    await saveRole({ name: "x' OR '1'='1" });
+
+    expect((await paginated({ filters: [filter(RestFilterFieldOperator.Equal, "x' OR '1'='1")] })).names).toEqual([
+      "x' OR '1'='1",
+    ]);
+  });
+
   it('should refuse an operator the query schema does not know', async () => {
     await expect(paginated({ filters: [{ name: 'name', operator: 'Like' as never, values: ['x'] }] })).rejects.toThrow(
       'Invalid option'

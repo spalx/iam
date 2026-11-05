@@ -1,27 +1,7 @@
 import { httpLogger, kafkaLogger, logger } from '@spalx/common-loggers-pkg';
 
-// The transport adapters log every request and response body in full. These fields must never reach a log file:
-// credentials, and card data (PCI DSS forbids storing a full card number, and card_number here is a Tranzila token).
-const SENSITIVE_KEYS = [
-  'access_token',
-  'refresh_token',
-  'token',
-  'mfa_code',
-  'password',
-  'card_number',
-  'ccno',
-  'cvv',
-  'mycvv',
-  'exp_date',
-  'expdate',
-  'expiry',
-  'expire_month',
-  'expire_year',
-  'expiry_month',
-  'expiry_year',
-  'exp_month',
-  'exp_year',
-];
+// The transport adapters log every request and response body in full. Credentials must never reach a log file.
+const SENSITIVE_KEYS = ['access_token', 'refresh_token', 'token', 'mfa_code', 'password'];
 
 const REDACTED = '[REDACTED]';
 const KEYS = SENSITIVE_KEYS.join('|');

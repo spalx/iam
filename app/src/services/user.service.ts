@@ -1,13 +1,14 @@
 import { EntityManager, Repository } from 'typeorm';
 import { NotFoundError, BadRequestError } from '@spalx/rest-pkg';
 import { CreateUserDTO, UpdateUserDTO, GetUserDTO, DeleteUserDTO } from '@spalx/iam-pkg';
+import { logger } from '@spalx/common-loggers-pkg';
 
 import roleService from '@/services/role.service';
 import UserEntity from '@/entities/user/user.entity';
 import RefreshTokenEntity from '@/entities/auth/refresh-token.entity';
 import appDataSource from '@/common/db/app-data-source';
 import { sha256 } from '@/common/utils';
-import appConfig from '@/config/app.config';
+import { hashPassword, verifyPassword } from '@/common/password-hash';
 
 class UserService {
   private get userRepository(): Repository<UserEntity> {
@@ -46,7 +47,7 @@ class UserService {
 
     const user = new UserEntity();
     user.identities = data.identities.map((identity) => this.hashIdentity(identity));
-    user.password = data.password ? this.hashPassword(data.password) : '';
+    user.password = data.password ? await hashPassword(data.password) : '';
     user.mfa_enabled = data.mfa_enabled ?? false;
     user.is_active = data.is_active === false ? false : true;
     user.meta = data.meta ?? null;
@@ -69,8 +70,10 @@ class UserService {
       user.identities = data.identities.map((identity) => this.hashIdentity(identity));
     }
 
+    // Setting a password, or clearing one the user had, is a password change
+    const passwordChanged: boolean = 'password' in data && (!!data.password || user.password !== '');
     if ('password' in data) {
-      user.password = data.password ? this.hashPassword(data.password) : '';
+      user.password = data.password ? await hashPassword(data.password) : '';
     }
 
     if ('mfa_enabled' in data) {
@@ -89,8 +92,9 @@ class UserService {
       user.roles = await Promise.all(data.roles.map((roleName) => roleService.findRoleByName(roleName)));
     }
 
-    if ('is_active' in data && !user.is_active) {
-      // Deactivation ends the user's sessions, so reactivating them later doesn't bring the old ones back
+    // Deactivation and a password change end the user's sessions: reactivating them later, or the old password, doesn't
+    // bring the old ones back
+    if (('is_active' in data && !user.is_active) || passwordChanged) {
       await appDataSource.transaction(async (manager: EntityManager) => {
         await manager.save(user);
         await manager.update(RefreshTokenEntity, { user_id: user.id }, { revoked: true });
@@ -118,8 +122,27 @@ class UserService {
     await this.userRepository.remove(user);
   }
 
-  hashPassword(password: string): string {
-    return sha256(password + appConfig.user.password_salt);
+  /**
+   * Whether the password is the user's. A stored hash of an older kind is replaced by a current one when it matches;
+   * that is not a password change, so the user's sessions are kept, and a failure to save it doesn't fail the sign-in.
+   */
+  async checkPassword(user: UserEntity, password: string): Promise<boolean> {
+    const { ok, needsUpgrade } = await verifyPassword(password, user.password);
+
+    if (ok && needsUpgrade) {
+      try {
+        const upgraded = await hashPassword(password);
+        await this.userRepository.update({ id: user.id }, { password: upgraded });
+        user.password = upgraded;
+      } catch (error) {
+        logger.warn('Could not upgrade a password hash', {
+          userId: user.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return ok;
   }
 
   private hashIdentity(identity: string): string {

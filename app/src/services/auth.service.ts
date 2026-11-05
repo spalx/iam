@@ -1,7 +1,7 @@
 import jwt, { SignOptions, Algorithm } from 'jsonwebtoken';
 import { randomBytes, createPublicKey, KeyObject } from 'crypto';
 import { exportJWK } from 'jose';
-import { Repository, EntityManager } from 'typeorm';
+import { Repository, EntityManager, LessThan } from 'typeorm';
 import {
   AuthenticateDTO,
   DidAuthenticateDTO,
@@ -23,6 +23,16 @@ import RefreshTokenEntity from '@/entities/auth/refresh-token.entity';
 import appConfig from '@/config/app.config';
 import { keys, KeyEntry } from '@/config/keys.config';
 import { generateUuid, sha256 } from '@/common/utils';
+import { authCodeMatches, hashAuthCode } from '@/common/auth-code-hash';
+
+// 32 random bytes: a challenge id that cannot be guessed, whatever the code's length
+const CHALLENGE_ID_BYTES = 32;
+
+interface ReservedTry {
+  id: string;
+  code_hash: string;
+  attempts: number;
+}
 
 class AuthService {
   private get refreshTokenRepository(): Repository<RefreshTokenEntity> {
@@ -49,9 +59,8 @@ class AuthService {
     }
 
     // Password is optional, but is insecure if not passed
-    if (!data.password || user.password === userService.hashPassword(data.password)) {
-      const authCode: AuthCodeEntity = await this.generateAndSaveAuthCode(user);
-      return { challenge_id: authCode.challenge_id, mfa_code: authCode.mfa_code };
+    if (!data.password || (await userService.checkPassword(user, data.password))) {
+      return await this.generateAndSaveAuthCode(user);
     }
 
     throw new UnauthorizedError('Invalid credentials');
@@ -66,7 +75,7 @@ class AuthService {
 
     if (user.mfa_enabled) {
       throw new BadRequestError('MFA authentication enabled, challenge_id and mfa_code must be provided');
-    } else if (!data.password || user.password !== userService.hashPassword(data.password)) {
+    } else if (!data.password || !(await userService.checkPassword(user, data.password))) {
       throw new UnauthorizedError('Invalid credentials');
     }
 
@@ -74,7 +83,24 @@ class AuthService {
   }
 
   async createMFAToken(data: CreateMFATokenDTO): Promise<DidCreateTokenDTO> {
-    const authCode: AuthCodeEntity = await this.findAuthCodeByCodeAndChallenge(data.mfa_code, data.challenge_id);
+    const reservedTry: ReservedTry | undefined = await this.reserveTry(data.challenge_id);
+    if (!reservedTry) {
+      throw new NotFoundError('Auth code not found');
+    }
+
+    if (!authCodeMatches(data.challenge_id, data.mfa_code, reservedTry.code_hash)) {
+      if (reservedTry.attempts >= appConfig.auth.auth_code_max_attempts) {
+        // That was the last wrong code this challenge allows
+        await this.authCodeRepository.delete({ id: reservedTry.id });
+      }
+      throw new NotFoundError('Auth code not found');
+    }
+
+    const authCode: AuthCodeEntity | null = await this.authCodeRepository.findOne({ where: { id: reservedTry.id } });
+    if (!authCode) {
+      throw new NotFoundError('Auth code not found');
+    }
+
     if (authCode.expires_at.getTime() < Date.now()) {
       throw new UnauthorizedError('MFA code expired');
     }
@@ -88,23 +114,31 @@ class AuthService {
     }
 
     return await appDataSource.transaction(async (manager: EntityManager) => {
-      // Delete the auth code, so it cannot be used again
-      await this.deleteAuthCode(authCode, manager);
+      // Only the request that deletes the code may use it, so two at once can't both get tokens
+      const { affected } = await manager.delete(AuthCodeEntity, { id: authCode.id });
+      if (affected !== 1) {
+        throw new NotFoundError('Auth code not found');
+      }
 
-      // Create new access and refresh tokens
       return await this.createTokensForUser(authCode.user, data.fingerprints, manager);
     });
   }
 
-  async findAuthCodeByCodeAndChallenge(mfaCode: string, challengeId: string): Promise<AuthCodeEntity> {
-    const authCode: AuthCodeEntity | null = await this.authCodeRepository.findOne({
-      where: { mfa_code: mfaCode, challenge_id: challengeId },
-    });
-    if (!authCode) {
-      throw new NotFoundError('Auth code not found');
-    }
+  // Counts one more try of the challenge, unless it has used them all. The count goes up before the code is compared,
+  // in one statement, so codes tried at the same time can't get past the limit.
+  private async reserveTry(challengeId: string): Promise<ReservedTry | undefined> {
+    const result = await this.authCodeRepository
+      .createQueryBuilder()
+      .update(AuthCodeEntity)
+      .set({ attempts: () => 'attempts + 1' })
+      .where('challenge_id = :challengeId AND attempts < :maxAttempts', {
+        challengeId,
+        maxAttempts: appConfig.auth.auth_code_max_attempts,
+      })
+      .returning(['id', 'code_hash', 'attempts'])
+      .execute();
 
-    return authCode;
+    return (result.raw as ReservedTry[])[0];
   }
 
   async refreshToken(data: RefreshTokenDTO): Promise<DidRefreshTokenDTO> {
@@ -234,30 +268,23 @@ class AuthService {
     await (manager ? manager.save(refreshToken) : refreshToken.save());
   }
 
-  private async deleteAuthCode(authCode: AuthCodeEntity, manager?: EntityManager): Promise<void> {
-    await (manager ? manager.remove(authCode) : this.authCodeRepository.remove(authCode));
-  }
+  private async generateAndSaveAuthCode(user: UserEntity): Promise<DidAuthenticateDTO> {
+    // Judged by IAM's clock, which set the expiry: the database's may run in another zone
+    await this.authCodeRepository.delete({ expires_at: LessThan(new Date()) });
 
-  private async generateAndSaveAuthCode(user: UserEntity): Promise<AuthCodeEntity> {
-    let code = '';
-    while (true) {
-      code = this.generateRandomString(appConfig.auth.auth_code_length);
-      const codeExists: AuthCodeEntity | null = await this.authCodeRepository.findOne({
-        where: { mfa_code: code, user_id: user.id },
-      });
-      if (!codeExists) {
-        break;
-      }
-    }
+    const code = this.generateRandomString(appConfig.auth.auth_code_length);
+    const challengeId = randomBytes(CHALLENGE_ID_BYTES).toString('base64url');
 
     const authCode = new AuthCodeEntity();
     authCode.expires_at = new Date(Date.now() + 1000 * appConfig.auth.auth_code_expires_in);
     authCode.user_id = user.id;
-    authCode.mfa_code = code;
-    authCode.challenge_id = this.generateRandomString(appConfig.auth.auth_code_length);
+    authCode.code_hash = hashAuthCode(challengeId, code);
+    authCode.challenge_id = challengeId;
+    authCode.attempts = 0;
     await authCode.save();
 
-    return authCode;
+    // The only time the code is readable: the caller delivers it
+    return { challenge_id: challengeId, mfa_code: code };
   }
 
   private generateRandomString(length = 6): string {

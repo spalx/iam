@@ -241,7 +241,13 @@ describe('RoleService - getRoles', () => {
     // Assert
     expect(result).toEqual({ roles, count: 4 });
     expect(roleRepository.createQueryBuilder).toHaveBeenCalledWith('role');
-    expect(applyRestQueryParams).toHaveBeenCalledWith(qb, 'role', { page: 2, limit: 1, filters });
+    expect(applyRestQueryParams).toHaveBeenCalledWith(
+      qb,
+      'role',
+      { page: 2, limit: 1, filters, fields: [] },
+      { id: 'role.id', name: 'role.name', created_at: 'role.created_at', updated_at: 'role.updated_at' },
+      ['name', 'permissions']
+    );
     expect(qb.andWhere).not.toHaveBeenCalled();
   });
 
@@ -281,9 +287,9 @@ describe('RoleService - getRoles', () => {
     expect(jest.mocked(applyRestQueryParams).mock.calls[0][2].fields).toEqual(['name', 'permissions']);
   });
 
-  it('should pass the fields through untouched when none of them are allowed', async () => {
-    await roleService.getRoles({ fields: ['secret'] });
+  it('should select every field when none of the requested ones are allowed', async () => {
+    await roleService.getRoles({ fields: ['(SELECT password FROM users LIMIT 1)'] });
 
-    expect(jest.mocked(applyRestQueryParams).mock.calls[0][2].fields).toEqual(['secret']);
+    expect(jest.mocked(applyRestQueryParams).mock.calls[0][2].fields).toEqual([]);
   });
 });

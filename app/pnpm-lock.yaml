@@ -173,8 +173,8 @@ importers:
         specifier: 1.0.5
         version: 1.0.5
       '@spalx/http-transport-adapter':
-        specifier: 1.0.11
-        version: 1.0.11
+        specifier: 1.0.13
+        version: 1.0.13
       '@spalx/iam-pkg':
         specifier: 2.0.3
         version: 2.0.3
@@ -787,8 +787,8 @@ packages:
   '@spalx/common-loggers-pkg@1.0.5':
     resolution: {integrity: sha512-FEHMa5acebl20gH+76YgBPdBT49ZuyKHecjQONYkiHWdsXxFaQCmSJTVNKSLZWD+ZOkSAz9AWizvfO1etdWaQQ==}
 
-  '@spalx/http-transport-adapter@1.0.11':
-    resolution: {integrity: sha512-HkFSPnIeDa14ONAxQ2goBko99WhkQHKaOOAVKZQ8/m1eeRBDDpbB7TPlMHUrBnz1slNzemyUz52q4JrnbnZNEQ==}
+  '@spalx/http-transport-adapter@1.0.13':
+    resolution: {integrity: sha512-2Xkz5fr9HJYovVEyKQ+QlJJs9laZfCT8MRuDGeoBr6PUhmji8kwfuvPpaYAUZs6Zzmu3hU5i9Db/BMBraUgVnw==}
 
   '@spalx/iam-pkg@2.0.3':
     resolution: {integrity: sha512-RQfv6ZL/2a/ZWWbSabyg9Lftv9I1BCYpFgrVUIFvZwdykNa2v36DESChr/XkYIRaHLOS8K1k3csYvItrlwjr1g==}
@@ -3638,7 +3638,7 @@ snapshots:
       winston: 3.19.0
       winston-daily-rotate-file: 5.0.0(winston@3.19.0)
 
-  '@spalx/http-transport-adapter@1.0.11':
+  '@spalx/http-transport-adapter@1.0.13':
     dependencies:
       '@spalx/app-life-cycle-pkg': 1.1.0
       '@spalx/common-loggers-pkg': 1.0.5
