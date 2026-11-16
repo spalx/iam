@@ -211,39 +211,19 @@ describe('list', () => {
     ]);
   });
 
-  it('should search names, one word or several', async () => {
-    const name = (value: string): GetAllRestQueryParams => ({
-      filters: [{ name: 'name', operator: RestFilterFieldOperator.Contains, values: [value] }],
-    });
-
-    expect((await listIds(name('dan'))).ids).toEqual([dan.id, dana.id]);
-    expect((await listIds(name('Dana Le'))).ids).toEqual([dana.id]);
-    expect((await listIds(name('anna maria co'))).ids).toEqual([anna.id]);
+  it.each(['name', 'email', 'phone'])('should refuse a %p filter, since details are encrypted', async (name) => {
+    await expect(
+      listIds({ filters: [{ name, operator: RestFilterFieldOperator.StartsWith, values: ['da'] }] })
+    ).rejects.toThrow(`Unknown filter field ${name}`);
   });
 
-  it('should combine a name search with a plain column filter', async () => {
-    expect(
-      await listIds({
-        filters: [
-          { name: 'name', operator: RestFilterFieldOperator.Contains, values: ['an'] },
-          { name: 'is_active', operator: RestFilterFieldOperator.Equal, values: ['false'] },
-        ],
-      })
-    ).toEqual({ ids: [anna.id], count: 1 });
-  });
+  it('should page staff in SQL, keeping a user who also holds another role', async () => {
+    const customer = await saveRole({ name: 'customer' });
+    await saveUser({ identities: ['c1'], roles: [customer], meta: { first_name: 'Cust' } });
+    const staff = { name: 'role_name', operator: RestFilterFieldOperator.NotIn, values: ['customer'] };
 
-  it('should filter on email and phone, and paginate the matches', async () => {
-    const phone = { name: 'phone', operator: RestFilterFieldOperator.StartsWith, values: ['05'] };
-
-    expect(await listIds({ filters: [phone] })).toEqual({ ids: [anna.id, dan.id], count: 2 });
-    expect(await listIds({ filters: [phone], page: 2, limit: 1 })).toEqual({ ids: [dan.id], count: 2 });
-    expect(
-      (
-        await listIds({
-          filters: [{ name: 'email', operator: RestFilterFieldOperator.Equal, values: ['DANA@example.com'] }],
-        })
-      ).ids
-    ).toEqual([dana.id]);
+    expect(await listIds({ filters: [staff], page: 1, limit: 2 })).toEqual({ ids: [anna.id, dan.id], count: 3 });
+    expect(await listIds({ filters: [staff], page: 2, limit: 2 })).toEqual({ ids: [dana.id], count: 3 });
   });
 
   it('should filter on a role name through the join', async () => {
@@ -265,16 +245,6 @@ describe('list', () => {
     ).toEqual([anna.id, dana.id]);
     expect((await listIds(byRole(RestFilterFieldOperator.In, 'agent', 'support'))).ids).toEqual([anna.id, dan.id]);
     expect((await listIds(byRole(RestFilterFieldOperator.NotIn, 'agent'))).ids).toEqual([dan.id, dana.id]);
-  });
-
-  it('should search the start of a name, an email or a phone', async () => {
-    const startsWith = (name: string, value: string): GetAllRestQueryParams => ({
-      filters: [{ name, operator: RestFilterFieldOperator.StartsWith, values: [value] }],
-    });
-
-    expect((await listIds(startsWith('name', 'Dan'))).ids).toEqual([dan.id, dana.id]);
-    expect((await listIds(startsWith('email', 'anna@'))).ids).toEqual([anna.id]);
-    expect((await listIds(startsWith('phone', '050'))).ids).toEqual([dan.id]);
   });
 
   it('should refuse a filter or sort name it does not offer', async () => {

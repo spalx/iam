@@ -3,7 +3,7 @@ import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers
 import { createTestKeys } from './test-keys';
 
 // Production runs PostgreSQL 18.
-const POSTGRES_IMAGE = 'postgres:18';
+const POSTGRES_IMAGE = 'postgres:18.6';
 
 declare global {
   var __POSTGRES_CONTAINER__: StartedPostgreSqlContainer | undefined;
